@@ -5,6 +5,6 @@ hero.jpg       Bakgrunn øverst på forsiden (erstatter 3D-byen). Bredt bilde, m
 gateliv.jpg    Bilde 1: Gatelivet i full fart
 politi.jpg     Bilde 2: Politi
 lab.jpg        Bilde 3: Ikke alt lages på et laboratorium
-bedrifter.jpg  Bilde 4: Bedrifter og sykehus
+byen.jpg       Bilde 4: Byen eies av spillerne
 
 Bildene 1–4 vises i formatet 2,2 : 1, for eksempel 1600 x 730 px.
