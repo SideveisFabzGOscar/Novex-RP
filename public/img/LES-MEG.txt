@@ -1,0 +1,10 @@
+Legg egne skjermbilder fra FiveM i denne mappen med disse navnene.
+Finnes ikke filen, viser siden 3D-bildet i stedet.
+
+hero.jpg       Bakgrunn øverst på forsiden (erstatter 3D-byen). Bredt bilde, minst 1920 px.
+gateliv.jpg    Bilde 1: Gatelivet i full fart
+politi.jpg     Bilde 2: Politi
+krim.jpg       Bilde 3: Kriminalitet
+bedrifter.jpg  Bilde 4: Bedrifter og sykehus
+
+Bildene 1–4 vises i formatet 2,2 : 1, for eksempel 1600 x 730 px.

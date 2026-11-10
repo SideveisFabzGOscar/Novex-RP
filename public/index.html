@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Project Novex RP</title>
+<meta name="description" content="Project Novex er en whitelistet norsk FiveM-server for seriøst rollespill. Søk whitelist, jobb og gjeng i spillerpanelet.">
+<meta property="og:title" content="Project Novex RP">
+<meta property="og:description" content="Norsk FiveM-server for seriøst rollespill.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+/* Layout: NRS-style marketing site. Black 3D hero, white content bands, black cinema + showroom bands, red CTA band. Player panel = sidebar + content on white. Deliberately one light look with black bands. */
+:root{
+  --paper:#ffffff; --paper2:#f5f2f2; --ink:#0f0c0c; --ink2:#3b3434; --muted:#6e6566; --line:#e6e0e0; --line2:#d3cbcb;
+  --red:#e0141f; --red2:#b80f19; --redsoft:#fde8e9;
+  --night:#0b0909; --night2:#151112; --night3:#1f191a; --nline:#2d2526; --nmuted:#a29899;
+  --ok:#11804a; --oksoft:#e3f4ea; --warn:#a86a06; --warnsoft:#fbf0dc; --bad:#c41b1b; --badsoft:#fde7e7;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --wrap:1200px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:90;background:var(--night)}
+a{color:inherit}
+h1,h2,h3,h4{font-family:var(--display);font-weight:800;line-height:.95;margin:0;text-wrap:balance;text-transform:uppercase;letter-spacing:.01em}
+p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.wrap{max-width:var(--wrap);margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.red{color:var(--red)}
+
+/* ---------- nav ---------- */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:80;background:rgba(11,9,9,.97);color:#fff;border-bottom:1px solid var(--nline)}
+.nav .wrap{display:flex;align-items:center;gap:26px;height:68px}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;white-space:nowrap}
+.logo svg{width:34px;height:34px;flex:none}
+.logo span{font-family:var(--display);font-weight:900;font-size:26px;letter-spacing:.04em;line-height:1}
+.logo small{display:block;font-family:var(--body);font-size:10px;font-weight:600;letter-spacing:.22em;color:var(--nmuted);margin-top:2px}
+.links{display:flex;gap:22px;flex:1;min-width:0}
+.links a{text-decoration:none;color:#cfc7c8;font-weight:500;font-size:15px;white-space:nowrap;position:relative;padding:4px 0}
+.links a:hover{color:#fff}
+.links a.on{color:#fff}
+.links a.on::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:2px;background:var(--red)}
+.live{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.12em;color:#fff;white-space:nowrap}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(224,20,31,.6);animation:pulse 1.6s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(224,20,31,0)}100%{box-shadow:0 0 0 0 rgba(224,20,31,0)}}
+.menu-btn{display:none;background:none;border:1px solid var(--nline);color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer}
+@media (max-width:1020px){
+  .links{display:none;position:absolute;top:68px;left:0;right:0;flex-direction:column;gap:0;background:var(--night);border-bottom:1px solid var(--nline);padding:6px max(16px,env(safe-area-inset-left,0px)) 12px}
+  .links.open{display:flex}
+  .links a{padding:12px 0;border-bottom:1px solid var(--nline)}
+  .links a.on::after{display:none}
+  .menu-btn{display:block;margin-left:auto}
+  .live{display:none}
+}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);padding:11px 20px;border-radius:4px;font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:transform .15s,background .15s,color .15s,border-color .15s}
+.btn:hover{background:var(--ink);color:#fff}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.red:hover{background:var(--red2);border-color:var(--red2)}
+.btn.white{background:#fff;border-color:#fff;color:var(--ink)}
+.btn.white:hover{background:transparent;color:#fff}
+.btn.line-w{border-color:rgba(255,255,255,.4);color:#fff}
+.btn.line-w:hover{background:#fff;color:var(--ink);border-color:#fff}
+.btn.sm{padding:7px 13px;font-size:14px}
+.btn.ghost{border-color:var(--line2)}
+.btn.ghost:hover{background:var(--paper2);color:var(--ink);border-color:var(--ink)}
+.btn.danger{border-color:var(--line2);color:var(--bad)}
+.btn.danger:hover{background:var(--badsoft);color:var(--bad);border-color:var(--bad)}
+.btn[disabled]{opacity:.4;cursor:not-allowed;pointer-events:none}
+.nav .btn{border-color:#fff;color:#fff;padding:8px 16px;font-size:14px}
+.nav .btn:hover{background:#fff;color:var(--ink)}
+
+/* ---------- hero ---------- */
+.hero{position:relative;background:var(--night);color:#fff;overflow:hidden;isolation:isolate}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:-2}
+.hero .heroyt{position:absolute;inset:0;z-index:-2;overflow:hidden;pointer-events:none;background:var(--night)}
+.hero .heroyt iframe{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:0}
+.hero .herovid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;background:var(--night)}
+.hero .credit{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:14px;font-size:11px;letter-spacing:.08em;color:var(--nmuted);opacity:.8}
+.hero::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(11,9,9,.92) 0%,rgba(11,9,9,.55) 48%,rgba(11,9,9,.05) 80%),linear-gradient(0deg,rgba(11,9,9,1) 0%,rgba(11,9,9,0) 30%)}
+.hero .wrap{padding-block:110px 120px}
+.tag{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;border:1px solid rgba(255,255,255,.25);padding:7px 14px;border-radius:2px;background:rgba(0,0,0,.35)}
+.tag b{color:var(--red)}
+.hero h1{font-size:clamp(56px,10vw,132px);font-weight:900;margin:24px 0 22px;max-width:9.5ch;line-height:.86}
+.hero h1 em{font-style:normal;color:var(--red);display:block}
+.hero .lead{font-size:clamp(17px,1.6vw,20px);color:#ddd5d6;max-width:52ch}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
+.connect{margin-top:30px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;color:var(--nmuted)}
+.copy{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:14px;color:#fff;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);padding:7px 8px 7px 12px;border-radius:4px;cursor:pointer}
+.copy span{font-family:var(--body);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:var(--red);padding:3px 7px;border-radius:2px}
+.hero .scroll{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:28px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--nmuted);writing-mode:vertical-rl}
+
+/* ticker */
+.ticker{background:var(--red);color:#fff;overflow:hidden;white-space:nowrap;border-block:1px solid var(--red2)}
+.ticker div{display:inline-flex;gap:48px;padding:12px 0;animation:tick 40s linear infinite;font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:.06em;text-transform:uppercase}
+.ticker div span::before{content:"/";margin-right:48px;opacity:.5}
+@keyframes tick{to{transform:translateX(-50%)}}
+
+/* ---------- sections ---------- */
+.band{padding-block:100px}
+.band.tight{padding-block:72px}
+.band.dark{background:var(--night);color:#fff}
+.band.grey{background:var(--paper2)}
+.eyebrow{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--red);margin-bottom:16px}
+.eyebrow::before{content:"";width:22px;height:2px;background:var(--red)}
+.h2{font-size:clamp(44px,6.5vw,84px);font-weight:900}
+.sub{color:var(--muted);font-size:18px;max-width:58ch;margin-top:18px}
+.dark .sub{color:var(--nmuted)}
+.statement{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:clamp(30px,4.2vw,54px);line-height:1.02;max-width:22ch;letter-spacing:.005em}
+.statement em{font-style:normal;color:var(--red)}
+.intro-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:56px;align-items:end}
+.intro-grid>*{min-width:0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:64px;border-top:1.5px solid var(--ink)}
+.stat{padding:22px 20px 0 0}
+.stat b{display:block;font-family:var(--display);font-weight:900;font-size:clamp(40px,5vw,64px);line-height:1}
+.stat span{color:var(--muted);font-size:14px}
+@media (max-width:860px){.intro-grid{grid-template-columns:1fr;gap:24px}.stats{grid-template-columns:1fr 1fr}}
+
+/* feature rows */
+.feats{display:grid;gap:96px;margin-top:64px}
+.frow{display:grid;grid-template-columns:1.25fr 1fr;gap:64px;align-items:center}
+.frow:nth-child(even) .shot{order:2}
+.frow>*{min-width:0}
+.shot{position:relative;perspective:1200px}
+.shot .frame{position:relative;aspect-ratio:2.2/1;max-width:100%;border-radius:6px;overflow:hidden;background:linear-gradient(135deg,#1a1213,#060505);box-shadow:0 40px 80px -30px rgba(15,12,12,.55);transform-style:preserve-3d;transition:transform .25s ease-out}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.shot .label{position:absolute;left:14px;bottom:14px;font-family:var(--mono);font-size:12px;color:#fff;background:rgba(0,0,0,.55);padding:4px 8px;border-radius:2px;transform:translateZ(40px)}
+.shot .rec{position:absolute;right:14px;top:14px;display:flex;gap:6px;align-items:center;font-size:11px;font-weight:700;letter-spacing:.14em;color:#fff;transform:translateZ(40px)}
+.shot .rec::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--red)}
+.shot::after{content:"";position:absolute;inset:auto -14px -14px 14px;height:100%;border:1.5px solid var(--red);border-radius:6px;z-index:-1}
+.frow:nth-child(even) .shot::after{inset:auto 14px -14px -14px}
+.ftext .num{font-family:var(--mono);color:var(--red);font-size:14px}
+.ftext h3{font-size:clamp(36px,4vw,54px);font-weight:900;margin:10px 0 16px}
+.ftext p{color:var(--ink2);font-size:17px;max-width:46ch}
+.ftext ul{list-style:none;padding:0;margin:22px 0 0;display:grid;gap:10px}
+.ftext li{display:flex;gap:12px;align-items:baseline;font-weight:500}
+.ftext li::before{content:"";width:8px;height:8px;background:var(--red);flex:none;transform:translateY(-1px)}
+@media (max-width:860px){.frow{grid-template-columns:1fr;gap:36px}.frow:nth-child(even) .shot{order:0}.feats{gap:72px}}
+
+/* cinema */
+.cinema{margin-top:44px;display:grid;grid-template-columns:1fr;gap:20px}
+.cinema>*{min-width:0}
+.screen{position:relative;aspect-ratio:16/9;max-width:100%;background:#000;border-radius:6px;overflow:hidden;border:1px solid var(--nline)}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.screen video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;background:#000}
+.screen .wm{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);z-index:3;display:grid;justify-items:center;gap:6px;pointer-events:none;text-align:center;opacity:.9;filter:drop-shadow(0 2px 6px rgba(0,0,0,.55))}
+.screen.vid .wm{display:none}
+.screen .wm svg{width:clamp(34px,6vw,64px);height:auto}
+.screen .wm b{font-family:var(--display);font-weight:900;font-size:clamp(16px,2.6vw,30px);letter-spacing:.08em;color:#fff;line-height:1}
+.screen .wm b span{color:var(--red)}
+.screen .wm small{font-family:var(--mono);font-size:clamp(9px,1.1vw,12px);letter-spacing:.12em;color:#fff;text-transform:uppercase}
+.screen .bars::before,.screen .bars::after{content:"";position:absolute;left:0;right:0;height:7%;background:#000;z-index:2}
+.screen .bars::before{top:0}.screen .bars::after{bottom:0}
+.screen .hud{position:absolute;inset:0;z-index:3;pointer-events:none;padding:9% 4% 0;display:flex;justify-content:space-between;align-items:flex-start;font-family:var(--mono);font-size:12px;color:#fff}
+.screen .hud b{display:block;font-family:var(--display);font-size:clamp(22px,3vw,40px);font-weight:900;letter-spacing:.02em;text-transform:uppercase;line-height:1}
+.screen .hud .rec{display:flex;gap:7px;align-items:center;letter-spacing:.12em}
+.screen .hud .rec::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--red);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.screen .ctrl{position:absolute;left:4%;bottom:10%;z-index:4;width:48px;height:48px;border-radius:50%;border:0;background:#fff;cursor:pointer;display:grid;place-items:center}
+.screen .ctrl::before{content:"";width:14px;height:16px;border-left:5px solid var(--ink);border-right:5px solid var(--ink)}
+.screen .ctrl.paused::before{width:0;height:0;border:0;border-left:16px solid var(--ink);border-top:10px solid transparent;border-bottom:10px solid transparent;margin-left:4px}
+.clips{display:grid;gap:8px;align-content:start}
+.clip{display:grid;gap:8px;text-align:left;background:var(--night2);border:1px solid var(--nline);border-radius:4px;padding:14px 16px;cursor:pointer;color:#fff}
+.clip:hover{border-color:#5a4c4d}
+.clip.on{border-color:var(--red)}
+.clip b{font-family:var(--display);font-size:24px;font-weight:800;text-transform:uppercase;line-height:1}
+.clip small{color:var(--nmuted);font-size:13px}
+.clip .prog{height:3px;background:var(--nline);border-radius:2px;overflow:hidden}
+.clip .prog i{display:block;height:100%;width:0;background:var(--red)}
+.yt{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:8px;padding:16px;border:1px dashed var(--nline);border-radius:4px;font-size:14px;color:var(--nmuted)}
+@media (max-width:900px){.cinema{grid-template-columns:1fr}.clips{grid-template-columns:1fr 1fr}}
+
+/* showroom */
+.show{display:grid;grid-template-columns:1.5fr 1fr;gap:40px;margin-top:44px;align-items:center}
+.show>*{min-width:0}
+.idmaker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:48px;margin-top:44px;align-items:center}
+.idform{display:grid;gap:16px}
+.idform label{display:grid;gap:6px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--nmuted)}
+.idform input:not([type=checkbox]):not([type=radio]):not([type=file]),.idform select{width:100%;background:var(--night2);border:1.5px solid var(--nline);border-radius:4px;padding:11px 13px;font-size:16px;color:#fff;text-transform:none;letter-spacing:0;font-weight:500;color-scheme:dark}
+.idform input:focus,.idform select:focus{outline:none;border-color:var(--red)}
+.idform .f2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.idform fieldset{border:0;padding:0;margin:0;display:grid;gap:8px}
+.idform legend{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--nmuted);margin-bottom:8px;padding:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:block!important}.chip input,.sw input{position:absolute;opacity:0;width:1px;height:1px}
+.chip span{display:inline-block;padding:8px 13px;border:1.5px solid var(--nline);border-radius:999px;color:#ddd5d6;font-size:14px;font-weight:600;letter-spacing:0;text-transform:none;cursor:pointer}
+.chip input:checked+span{background:var(--red);border-color:var(--red);color:#fff}
+.chip input:focus-visible+span,.sw input:focus-visible+span{outline:2px solid #fff;outline-offset:2px}
+.sw{display:inline-flex!important;align-items:center;gap:8px!important;grid-auto-flow:column;color:#ddd5d6!important;font-size:14px!important;text-transform:none!important;letter-spacing:0!important;cursor:pointer;padding:6px 12px 6px 6px;border:1.5px solid var(--nline);border-radius:999px}
+.sw span{width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+.sw:has(input:checked){border-color:#fff}
+.upload{position:relative;grid-template-columns:auto 1fr;align-items:center;column-gap:12px!important}
+.upload>input{position:absolute;opacity:0;width:1px;height:1px}
+.upload{grid-template-areas:"t t" "b s"}
+.upload .btn{grid-area:b;cursor:pointer}.upload small{grid-area:s;text-transform:none;letter-spacing:0;font-weight:400;color:var(--nmuted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upload:focus-within .btn{outline:2px solid #fff;outline-offset:2px}
+.iderr{color:#ff8a8f;font-weight:600;font-size:14px}
+.idstage{perspective:1400px;display:grid;justify-items:center;gap:14px}
+.idcard{--rx:0deg;--ry:0deg;--mx:50%;--my:30%;position:relative;width:100%;max-width:640px;aspect-ratio:856/540;transform-style:preserve-3d;transform:rotateX(var(--rx)) rotateY(calc(var(--ry) + var(--flip,0deg)));transition:transform .5s cubic-bezier(.2,.8,.2,1);cursor:pointer;border-radius:4.2%/6.6%;filter:drop-shadow(0 30px 40px rgba(0,0,0,.55))}
+.idcard.flipped{--flip:180deg}
+.idcard:focus-visible{outline:2px solid #fff;outline-offset:6px}
+.idcard .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:inherit;overflow:hidden}
+.idcard .face svg{width:100%;height:100%;display:block}
+.idcard .back{transform:rotateY(180deg)}
+.idcard .shine{position:absolute;inset:0;border-radius:inherit;pointer-events:none;mix-blend-mode:soft-light;background:radial-gradient(circle at var(--mx) var(--my),rgba(255,255,255,.55),rgba(255,255,255,0) 45%),linear-gradient(115deg,transparent 30%,rgba(255,80,120,.25) 42%,rgba(80,200,255,.25) 50%,rgba(255,240,120,.2) 58%,transparent 70%);background-size:100% 100%,220% 220%;background-position:0 0,var(--mx) var(--my);transform:translateZ(1px)}
+.idcard.flipped .shine{opacity:.5}
+.idhint{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--nmuted)}
+@media (max-width:900px){.idmaker{grid-template-columns:1fr}.idstage{order:-1}}
+@media (prefers-reduced-motion:reduce){.idcard{transition:none}}
+.stage{position:relative;aspect-ratio:16/11;max-width:100%;border-radius:6px;overflow:hidden;background:radial-gradient(ellipse at 50% 70%,#2a1416 0%,#0b0909 65%);cursor:grab;touch-action:pan-y}
+.stage:active{cursor:grabbing}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stagephoto{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+.stage.has-photo{cursor:default}
+.stage.has-photo .hint{display:none}
+.stage .plate{z-index:2}
+.stage .hint{position:absolute;left:16px;bottom:14px;font-size:12px;color:var(--nmuted);letter-spacing:.08em}
+.stage .plate{position:absolute;right:16px;top:14px;font-family:var(--mono);font-size:13px;background:#fff;color:var(--ink);border-left:10px solid #1f4fa8;padding:3px 10px 3px 8px;border-radius:3px;font-weight:500}
+.carlist{display:grid;gap:8px}
+.carbtn{display:flex;justify-content:space-between;align-items:center;gap:12px;background:transparent;border:1px solid var(--nline);color:#fff;border-radius:4px;padding:13px 16px;cursor:pointer;text-align:left}
+.carbtn b{font-family:var(--display);font-size:24px;font-weight:800;text-transform:uppercase;line-height:1}
+.carbtn small{color:var(--nmuted)}
+.carbtn.on{border-color:var(--red);background:var(--night2)}
+.swatch{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.3);flex:none}
+.specs{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--nline);border:1px solid var(--nline);border-radius:4px;overflow:hidden;margin-top:16px}
+.specs div{background:var(--night);padding:14px 16px}
+.specs span{display:block;font-size:12px;color:var(--nmuted);letter-spacing:.08em;text-transform:uppercase}
+.specs b{font-family:var(--mono);font-size:18px;font-weight:500}
+@media (max-width:900px){.show{grid-template-columns:1fr}}
+
+/* business cards */
+.bgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:44px}
+@media (max-width:1000px){.bgrid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:540px){.bgrid{grid-template-columns:1fr}}
+.bcard{perspective:900px}
+.bcard .in{position:relative;border:1.5px solid var(--ink);border-radius:6px;padding:22px;background:#fff;display:grid;gap:12px;min-height:250px;align-content:start;transition:transform .25s ease-out,box-shadow .25s;transform-style:preserve-3d}
+.bcard:hover .in{box-shadow:12px 12px 0 var(--red)}
+.mark{width:58px;height:58px;border-radius:4px;background:var(--ink);color:#fff;display:grid;place-items:center;font-family:var(--display);font-size:28px;font-weight:900;transform:translateZ(30px)}
+.bcard h3{font-size:28px;transform:translateZ(20px)}
+.bcard p{color:var(--muted);font-size:15px}
+.bcard .foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:48px;counter-reset:s}
+.step{padding:28px 24px 0 0;border-top:1.5px solid var(--ink);display:grid;gap:10px;align-content:start;position:relative}
+.step::before{content:"";position:absolute;top:-6px;left:0;width:10px;height:10px;background:var(--red)}
+.step .n{font-family:var(--mono);font-size:13px;color:var(--red)}
+.step h3{font-size:30px}
+.step p{color:var(--ink2);font-size:15px}
+@media (max-width:860px){.steps{grid-template-columns:1fr 1fr;row-gap:36px}}
+@media (max-width:480px){.steps{grid-template-columns:1fr}}
+
+/* cta band */
+.ctaband{background:var(--red);color:#fff;position:relative;overflow:hidden}
+.ctaband .wrap{padding-block:88px;display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap;position:relative;z-index:1}
+.ctaband h2{font-size:clamp(48px,7vw,96px);font-weight:900;max-width:12ch}
+.ctaband p{font-size:18px;opacity:.9;margin-top:14px;max-width:44ch}
+.ctaband::after{content:"NOVEX";position:absolute;right:-2%;bottom:-18%;font-family:var(--display);font-weight:900;font-size:clamp(160px,26vw,380px);color:rgba(0,0,0,.08);line-height:1;pointer-events:none}
+
+/* faq */
+.faqgrid{display:grid;grid-template-columns:1fr 1.5fr;gap:56px;align-items:start}
+.faqgrid>*{min-width:0}
+.faq{display:grid;border-top:1.5px solid var(--ink)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;padding:22px 0;font-weight:700;font-size:18px;list-style:none;display:flex;justify-content:space-between;gap:16px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--red);font-size:26px;line-height:.8;font-weight:400}
+.faq details[open] summary::after{content:"−"}
+.faq details p{padding-bottom:22px;color:var(--ink2);max-width:60ch}
+@media (max-width:860px){.faqgrid{grid-template-columns:1fr;gap:28px}}
+
+/* footer */
+footer{background:var(--night);color:#fff;padding-block:72px 36px}
+.fgrid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:36px}
+.fgrid h4{font-size:20px;margin-bottom:14px}
+.fgrid a:not(.logo){display:block;text-decoration:none;color:var(--nmuted);padding:5px 0}
+.fgrid a:not(.logo):hover{color:#fff}
+.fgrid p{color:var(--nmuted);margin-top:16px;max-width:36ch}
+.fbottom{margin-top:56px;padding-top:22px;border-top:1px solid var(--nline);font-size:13px;color:#7d7374;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media (max-width:760px){.fgrid{grid-template-columns:1fr 1fr}.fgrid>div:first-child{grid-column:1/-1}}
+
+/* ---------- inner pages ---------- */
+.phead{background:var(--night);color:#fff;position:relative;overflow:hidden}
+.phead .wrap{padding-block:72px 56px;position:relative;z-index:1}
+.phead h1{font-size:clamp(56px,9vw,112px);font-weight:900}
+.phead p{color:var(--nmuted);font-size:18px;max-width:62ch;margin-top:14px}
+.phead::after{content:"";position:absolute;right:-80px;top:-80px;width:340px;height:340px;border:40px solid var(--red);border-radius:50%;opacity:.9}
+@media (max-width:700px){.phead::after{width:200px;height:200px;border-width:24px;right:-90px;top:-90px}}
+.page{padding-block:64px 96px}
+
+.rules{display:grid;grid-template-columns:230px 1fr;gap:56px}
+.rules>*{min-width:0}
+.rules nav{position:sticky;top:100px;align-self:start;display:grid;gap:2px;border-left:1.5px solid var(--line)}
+.rules nav a{text-decoration:none;color:var(--muted);padding:8px 14px;font-weight:600;margin-left:-1.5px;border-left:1.5px solid transparent}
+.rules nav a:hover{color:var(--ink);border-left-color:var(--red)}
+.rsec{padding-bottom:40px;margin-bottom:40px;border-bottom:1px solid var(--line);scroll-margin-top:100px}
+.rsec h2{font-size:44px;margin-bottom:18px}
+.rule{display:grid;grid-template-columns:70px 1fr;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.rule .p{font-family:var(--mono);color:var(--red);font-size:14px;padding-top:2px}
+.rule div{min-width:0}
+.rule b{display:block;font-size:17px}
+.rule span{color:var(--ink2)}
+@media (max-width:760px){.rules{grid-template-columns:1fr;gap:28px}.rules nav{position:static;display:flex;flex-wrap:wrap;border:0}.rules nav a{border:1px solid var(--line);margin:0 6px 6px 0;padding:6px 10px}}
+
+.principles{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1.5px solid var(--ink)}
+.princ{padding:24px 24px 0 0;display:grid;gap:8px;align-content:start}
+.princ h3{font-size:30px}
+.princ h3::before{content:"";display:block;width:24px;height:4px;background:var(--red);margin-bottom:14px}
+.princ p{color:var(--ink2)}
+.rintro{color:var(--muted);margin:-6px 0 14px;font-size:17px}
+table.cool{min-width:0}
+table.cool tbody tr{cursor:default}
+table.cool tbody tr:hover td{background:transparent}
+@media (max-width:760px){.principles{grid-template-columns:1fr;gap:20px}}
+.howto{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+@media (max-width:860px){.howto{grid-template-columns:1fr}}
+.howto .card h3{font-size:30px;margin:8px 0 10px}
+.kbd{font-family:var(--mono);background:var(--paper2);border:1px solid var(--line2);border-bottom-width:3px;border-radius:4px;padding:1px 7px;font-size:14px}
+
+/* ---------- panel ---------- */
+.panel{display:grid;grid-template-columns:240px 1fr;gap:56px;padding-block:52px 96px}
+.panel>main{min-width:0}
+.side{display:grid;gap:2px;align-content:start;position:sticky;top:100px}
+.who{display:flex;gap:12px;align-items:center;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.av{width:44px;height:44px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-family:var(--display);font-weight:900;font-size:22px;flex:none;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover}
+.av.lg{width:84px;height:84px;font-size:40px;border:3px solid var(--red)}
+.who b{display:block;line-height:1.2}
+.who small{color:var(--muted)}
+.side a{text-decoration:none;color:var(--ink2);padding:11px 14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;border-radius:4px;border-left:3px solid transparent}
+.side a:hover{background:var(--paper2)}
+.side a.on{background:var(--paper2);color:var(--ink);border-left-color:var(--red)}
+.side .count{font-family:var(--mono);font-size:12px;background:var(--red);color:#fff;border-radius:999px;padding:1px 8px;font-weight:500}
+.side hr{border:0;border-top:1px solid var(--line);margin:14px 0;width:100%}
+@media (max-width:860px){
+  .panel{grid-template-columns:1fr;gap:28px;padding-top:28px}
+  .side{position:static;display:flex;flex-wrap:wrap;gap:6px}
+  .who{width:100%;margin-bottom:6px;padding-bottom:14px}
+  .side a{border:1px solid var(--line);padding:7px 12px;gap:8px}
+  .side a.on{border-color:var(--ink);border-left-color:var(--ink)}
+  .side hr{display:none}
+}
+.ph{font-size:clamp(48px,6.5vw,76px);font-weight:900}
+.pintro{color:var(--muted);margin-top:10px;max-width:68ch;font-size:17px}
+.stack{display:grid;gap:20px;margin-top:30px}
+.card{background:#fff;border:1px solid var(--line2);border-radius:6px;padding:24px;min-width:0}
+.card h3{font-size:32px}
+.card.dark{background:var(--night);color:#fff;border-color:var(--night)}
+.profile{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.profile h2{font-size:52px;font-weight:900}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:12px}
+.kv span{display:block;color:var(--nmuted);font-size:13px}
+.kv b{font-weight:500;overflow-wrap:anywhere}
+@media (max-width:560px){.kv{grid-template-columns:1fr 1fr}}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.notice{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px dashed var(--line2);background:var(--paper2);border-radius:6px;padding:14px 18px;font-size:14px;color:var(--ink2)}
+
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;white-space:nowrap;background:var(--paper2);color:var(--ink2)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.sendt,.pill.apen{background:var(--warnsoft);color:var(--warn)}
+.pill.godkjent,.pill.besvart,.pill.ansetter{background:var(--oksoft);color:var(--ok)}
+.pill.avslatt{background:var(--badsoft);color:var(--bad)}
+.pill.lukket,.pill.fullt{background:var(--paper2);color:var(--muted)}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:24px}
+.tabs button{border:1px solid var(--line2);background:#fff;border-radius:4px;padding:7px 14px;font-weight:700;font-size:14px;cursor:pointer;color:var(--ink2)}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tbl{border:1px solid var(--line2);border-radius:6px;overflow-x:auto;margin-top:22px;background:#fff}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th{text-align:left;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:13px 18px;border-bottom:1px solid var(--line2);background:var(--paper2)}
+td{padding:15px 18px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:#fbf9f9}
+td small{display:block;color:var(--muted)}
+.empty{border:1.5px dashed var(--line2);border-radius:6px;padding:48px 20px;text-align:center;display:grid;gap:12px;justify-items:center}
+.empty h3{font-size:32px}
+.empty p{color:var(--muted);max-width:44ch}
+.list{display:grid;gap:10px}
+.li{display:flex;justify-content:space-between;gap:12px;align-items:center;background:#fff;border:1px solid var(--line2);border-radius:6px;padding:15px 18px;cursor:pointer;flex-wrap:wrap;text-align:left;width:100%}
+.li:hover{border-color:var(--ink)}
+.li .l{display:flex;gap:12px;align-items:center;flex-wrap:wrap;min-width:0}
+.li b{font-weight:700}
+.li small{color:var(--muted)}
+
+.jobs{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:18px}
+@media (max-width:640px){.jobs{grid-template-columns:1fr}}
+.job{display:grid;gap:12px;align-content:start}
+.job h3{font-size:32px}
+.job p{color:var(--ink2);font-size:15px}
+.job .meta{display:flex;gap:18px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.job .meta b{color:var(--ink)}
+.ghead{margin-top:40px;font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px}
+.ghead::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.back{font-weight:700;font-size:14px;cursor:pointer;background:none;border:0;padding:0;color:var(--ink);display:inline-flex;gap:6px}
+.back::before{content:"←";color:var(--red)}
+.form{background:#fff;border:1px solid var(--line2);border-radius:6px;padding:6px 28px;margin-top:24px}
+.q{padding:24px 0;border-bottom:1px solid var(--line);display:grid;gap:9px}
+.q:last-child{border-bottom:0}
+.q label{font-weight:700}
+.q label .n{color:var(--red);font-family:var(--mono);font-size:14px;margin-right:8px}
+.q label .req{color:var(--muted);font-weight:400}
+.q .hint{color:var(--muted);font-size:14px}
+.q .err{color:var(--bad);font-size:14px;font-weight:600}
+input[type=text],input[type=number],select,textarea{width:100%;background:#fff;border:1.5px solid var(--line2);border-radius:4px;padding:11px 13px;font-size:16px;color:var(--ink)}
+input.short,select.short{max-width:440px}
+textarea{min-height:130px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px var(--redsoft)}
+.bar{display:flex;gap:12px;justify-content:space-between;align-items:center;margin-top:22px;flex-wrap:wrap}
+.saved{color:var(--muted);font-size:14px}
+.reply{border-left:4px solid var(--warn);background:var(--warnsoft);border-radius:0 6px 6px 0;padding:16px 20px;display:grid;gap:6px}
+.reply.ok{border-left-color:var(--ok);background:var(--oksoft)}
+.reply.bad{border-left-color:var(--bad);background:var(--badsoft)}
+.answers div{padding:16px 0;border-bottom:1px solid var(--line)}
+.answers div:last-child{border-bottom:0}
+.answers b{display:block;font-size:14px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.answers p{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.thread{display:grid;gap:14px;margin-top:26px}
+.msg{background:#fff;border:1px solid var(--line2);border-radius:6px;padding:16px 20px;max-width:680px;width:100%}
+.msg.staff{margin-left:auto;background:var(--night);color:#fff;border-color:var(--night)}
+.msg header{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
+.msg.staff header{color:var(--nmuted)}
+.msg header b{color:inherit}
+.msg.staff header b{color:#fff}
+.msg header b .r{color:var(--red)}
+.msg p{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.reg{max-width:520px;margin:0 auto;display:grid;gap:16px}
+.reg .card{display:grid;gap:14px}
+.discord{background:#5865f2;border-color:#5865f2;color:#fff}
+.discord:hover{background:#4752c4;border-color:#4752c4;color:#fff}
+.note{font-size:13px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:4px;font-weight:700;z-index:100;border-left:4px solid var(--red);max-width:calc(100% - 32px)}
+.loading{display:flex;gap:10px;align-items:center;color:var(--muted);padding:40px 0}
+.loading::before{content:"";width:16px;height:16px;border:2px solid var(--line2);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+.live.off i{background:var(--nmuted);animation:none}
+.trailer{margin-top:44px;aspect-ratio:16/9;max-width:100%;border-radius:6px;overflow:hidden;border:1px solid var(--nline);background:#000}
+.trailer iframe{width:100%;height:100%;border:0;display:block}
+.hero.photo{background-size:cover;background-position:center}
+.hero.photo canvas{display:none}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="logo" href="#hjem" aria-label="Project Novex RP">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="3" fill="#e0141f"/><path d="M10 31V9h4.5l11 13.5V9H30v22h-4.5L14.5 17.5V31z" fill="#fff"/></svg>
+      <div><span>NOVEX</span><small>ROLEPLAY</small></div>
+    </a>
+    <button class="menu-btn" id="menuBtn" aria-expanded="false">Meny</button>
+    <nav class="links" id="links">
+      <a href="#hjem" data-r="hjem">Hjem</a>
+      <a href="#koble-til" data-r="koble-til">Koble til</a>
+      <a href="#regler" data-r="regler">Regler</a>
+      <a href="#bedrifter" data-r="bedrifter">Bedrifter</a>
+      <a href="#stillinger" data-r="stillinger">Stillinger</a>
+      <a href="#tickets" data-r="tickets">Support</a>
+    </nav>
+    <span class="live" id="live" hidden></span>
+    <a class="btn" href="#panel" id="panelBtn">Logg inn</a>
+  </div>
+</header>
+
+<!-- ================= HOME ================= -->
+<div id="home">
+  <section class="hero" id="hero">
+    <video class="herovid" id="heroVid" muted playsinline loop preload="none" poster="video/hero.jpg" data-src="video/hero.mp4" aria-hidden="true"></video>
+    <span class="credit" id="heroCredit" hidden></span>
+    <div class="wrap">
+      <span class="tag"><b>●</b> Whitelist åpen · søk i spillerpanelet</span>
+      <h1>En by av <em>uendelige muligheter</em></h1>
+      <p class="lead">Project Novex starter med deg. Et norsk FiveM-miljø bygget for dypt rollespill, seriøse systemer og historier som faktisk betyr noe.</p>
+      <div class="cta">
+        <a class="btn red" href="#whitelist">Søk whitelist</a>
+        <a class="btn line-w" href="#koble-til">Slik kobler du til</a>
+        <a class="btn line-w" href="#regler">Les reglene</a>
+      </div>
+      <div class="connect">F8 i FiveM: <button class="copy" data-copy="connect play.novexrp.no">connect play.novexrp.no <span>Kopier</span></button></div>
+    </div>
+    <span class="scroll">Scroll</span>
+  </section>
+
+  <div class="ticker" aria-hidden="true"><div>
+    <span>Politi</span><span>Ambulanse</span><span>Mekaniker</span><span>Gjenger</span><span>Bedrifter</span><span>Custom biler</span><span>Norsk RP</span><span>Spillerdrevet økonomi</span>
+    <span>Politi</span><span>Ambulanse</span><span>Mekaniker</span><span>Gjenger</span><span>Bedrifter</span><span>Custom biler</span><span>Norsk RP</span><span>Spillerdrevet økonomi</span>
+  </div></div>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="intro-grid">
+        <p class="statement">Et samfunn der <em>relasjoner</em> driver alt.</p>
+        <p class="sub" style="margin:0">Start en bedrift, bygg et imperium eller lev et sivilt liv med ekte dybde. Politi med reelle verktøy jakter kriminelle som planlegger hvert trekk. Moderne systemer, levende økonomi og historier du husker.</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>16+</b><span>Aldersgrense</span></div>
+        <div class="stat"><b>128</b><span>Spillerplasser</span></div>
+        <div class="stat"><b>48t</b><span>Svartid på søknader</span></div>
+        <div class="stat"><b>24/7</b><span>Staff og tickets</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band grey">
+    <div class="wrap">
+      <div class="eyebrow">Systemer</div>
+      <h2 class="h2">Hver detalj.<br>Gjennomtenkt.</h2>
+      <p class="sub">Fra gateplan til nødetater. Novex er bygget for spillere som tar rollespill på alvor.</p>
+      <div class="feats">
+        <div class="frow">
+          <div class="shot" data-tilt><div class="frame"><img data-still="gate" data-real="img/gateliv.jpg" alt="Maskert raner fyller en tralle med pengebunter i et bankhvelv"><span class="rec">REC</span><span class="label">BANKHVELVET</span></div></div>
+          <div class="ftext"><span class="num">01</span><h3>Gatelivet i full fart</h3><p>Custom biler, nattlig stemning og et bybilde som lever. Detaljene sitter når du kjører gjennom byen.</p><ul><li>Over 200 kjøretøy med norske skilt</li><li>Eget verksted med tuning og delesystem</li><li>Drivstoff, slitasje og forsikring</li></ul></div>
+        </div>
+        <div class="frow">
+          <div class="shot" data-tilt><div class="frame"><img data-still="utrykning" data-real="img/politi.jpg" alt="Varebil fra Zip Zap Zop parkert utenfor et kontorbygg"><span class="rec">REC</span><span class="label">SENTRUM · 14:05</span></div></div>
+          <div class="ftext"><span class="num">02</span><h3>Førerkort og vognkort, er du grei</h3><p>Seriøst politi-RP med realistiske kontroller, beslag og etterforskning. Konsekvensene varer.</p><ul><li>Fartskontroller, ruspåvirkning og bøteregister</li><li>Arrestasjon, avhør og fengsel</li><li>Eget ansettelsesløp med opplæring</li></ul></div>
+        </div>
+        <div class="frow">
+          <div class="shot" data-tilt><div class="frame"><img data-still="ovenfra" data-real="img/krim.jpg" alt="Bygningsarbeider med hjelm på en byggeplass med utsikt mot sentrum"><span class="rec">REC</span><span class="label">BYGGEPLASS · VEST</span></div></div>
+          <div class="ftext"><span class="num">03</span><h3>Ikke alt lages på et laboratorium</h3><p>Dyp krim med egne produksjonsløp, skjulte oppsett og scenarier som krever planlegging, ikke bare raske jobber.</p><ul><li>Gjenger godkjennes via søknad</li><li>Ran krever folk, utstyr og politi på jobb</li><li>Territorier og rykte over tid</li></ul></div>
+        </div>
+        <div class="frow">
+          <div class="shot" data-tilt><div class="frame"><img data-still="natt" data-real="img/bedrifter.jpg" alt="Tre arbeidere i grønne kjeledresser vasker vinduer fra en gangbro"><span class="rec">REC</span><span class="label">VINDUSVASK</span></div></div>
+          <div class="ftext"><span class="num">04</span><h3>Byen eies av spillerne</h3><p>Bedriftene drives av spillere. Priser, lønn og lager styres av dem som jobber der, og akuttmottaket bemannes av ekte helse-RP.</p><ul><li>Søk jobb direkte i spillerpanelet</li><li>Start egen bedrift med godkjent konsept</li><li>Ambulanse og sykehus uten respawn</li></ul></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band dark">
+    <div class="wrap">
+      <div class="eyebrow">Se byen i bevegelse</div>
+      <h2 class="h2">Novex på film</h2>
+      <p class="sub">Se traileren fra byen.</p>
+      <div class="trailer" id="trailer" hidden></div>
+      <div class="cinema">
+        <div class="screen" id="screen">
+          <video id="cineVideo" muted playsinline loop autoplay preload="auto" hidden></video>
+          <div class="wm" aria-hidden="true"><svg viewBox="0 0 40 40"><rect x="1" y="1" width="38" height="38" rx="3" fill="#e0141f"/><path d="M10 31V9h4.5l11 13.5V9H30v22h-4.5L14.5 17.5V31z" fill="#fff"/></svg><b>NOVEX <span>ROLLESPILL</span></b><small id="wmSub">play.novexrp.no</small></div>
+          <div class="bars"></div>
+          <div class="hud"><div><b id="cineTitle">Trailer</b><span id="cineSub">Novex Rollespill</span></div><span class="rec">REC</span></div>
+          <button class="ctrl" id="cinePlay" aria-label="Pause"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band dark" style="padding-top:0" id="karakter">
+    <div class="wrap">
+      <div class="eyebrow">Innbyggerkort</div>
+      <h2 class="h2">Lag karakteren din</h2>
+      <p class="sub">Fyll inn karakteren du vil spille. Kortet oppdateres mens du skriver, og du kan bruke det rett i whitelist-søknaden.</p>
+      <div class="idmaker">
+        <form class="idform" id="idForm" novalidate>
+          <div class="f2"><label for="idFirst">Fornavn<input id="idFirst" maxlength="18" value="Ola" autocomplete="off"></label><label for="idLast">Etternavn<input id="idLast" maxlength="20" value="Nordmann" autocomplete="off"></label></div>
+          <div class="f2"><label for="idBirth">Fødselsdato<input id="idBirth" type="date" value="1994-05-17"></label><label for="idSex">Kjønn<select id="idSex"><option value="M">Mann</option><option value="K">Kvinne</option><option value="X">Annet</option></select></label></div>
+          <label for="idJob">Yrke i byen<select id="idJob"></select></label>
+          <fieldset><legend>Førerkortklasser</legend><div class="chips">
+            <label class="chip"><input type="checkbox" name="idClass" value="A"><span>A · MC</span></label>
+            <label class="chip"><input type="checkbox" name="idClass" value="B" checked><span>B · Bil</span></label>
+            <label class="chip"><input type="checkbox" name="idClass" value="C"><span>C · Lastebil</span></label>
+            <label class="chip"><input type="checkbox" name="idClass" value="D"><span>D · Buss</span></label>
+          </div></fieldset>
+          <fieldset><legend>Kortfarge</legend><div class="chips">
+            <label class="sw"><input type="radio" name="idTheme" value="red" checked><span style="background:#e0141f"></span>Rød</label>
+            <label class="sw"><input type="radio" name="idTheme" value="black"><span style="background:#1b1617"></span>Svart</label>
+            <label class="sw"><input type="radio" name="idTheme" value="white"><span style="background:#f4f1f1"></span>Hvit</label>
+          </div></fieldset>
+          <label class="upload" for="idPhoto">Bilde av karakteren<input type="file" id="idPhoto" accept="image/*"><span class="btn line-w sm">Velg bilde</span><small id="idPhotoName">Valgfritt. Et skjermbilde fra spillet passer fint.</small></label>
+          <p class="iderr" id="idErr" hidden></p>
+          <div class="row"><button type="button" class="btn red" id="idUse">Bruk i whitelist-søknaden</button><button type="button" class="btn line-w" id="idSave">Last ned kortet</button></div>
+        </form>
+        <div class="idstage" id="idStage">
+          <div class="idcard" id="idCard" tabindex="0" role="button" aria-label="Novex innbyggerkort. Trykk for å snu."><div class="face front" id="idFront"></div><div class="face back" id="idBack"></div><div class="shine"></div></div>
+          <span class="idhint">Klikk på kortet for å snu det</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="spread"><div><div class="eyebrow">Bedrifter og etater</div><h2 class="h2">Finn din plass</h2></div><a class="btn" href="#bedrifter">Se alle</a></div>
+      <div class="bgrid" id="bizHome"></div>
+    </div>
+  </section>
+
+  <section class="band grey">
+    <div class="wrap">
+      <div class="eyebrow">Kom i gang</div>
+      <h2 class="h2">Slik blir du med</h2>
+      <div class="steps">
+        <div class="step"><span class="n">Steg 1</span><h3>Opprett profil</h3><p>Åpne spillerpanelet og legg inn Discord-navnet ditt.</p></div>
+        <div class="step"><span class="n">Steg 2</span><h3>Les reglene</h3><p>Regelverket er pensum. Spørsmålene i søknaden bygger på det.</p></div>
+        <div class="step"><span class="n">Steg 3</span><h3>Søk whitelist</h3><p>Fyll ut søknaden. Staff svarer i panelet, som regel innen 48 timer.</p></div>
+        <div class="step"><span class="n">Steg 4</span><h3>Koble til</h3><p>Når du er godkjent, koble til med <span class="mono">play.novexrp.no</span>.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ctaband">
+    <div class="wrap">
+      <div><h2>Har du en historie?</h2><p>La oss skrive den sammen. Søk whitelist og bli en del av byen.</p></div>
+      <div class="cta" style="margin:0"><a class="btn white" href="#whitelist">Søk nå</a><a class="btn line-w" href="#regler">Sjekk reglene</a></div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap faqgrid">
+      <div><div class="eyebrow">FAQ</div><h2 class="h2">Ofte stilte spørsmål</h2><p class="sub">Fant du ikke svaret? Opprett en ticket, så hjelper staff deg.</p><div style="margin-top:24px"><a class="btn" href="#tickets">Opprett ticket</a></div></div>
+      <div class="faq">
+        <details><summary>Hva er Project Novex?</summary><p>Novex er en norsk FiveM-rollespillserver med fokus på dypt RP, klare regler og et aktivt staff-team. Målet er seriøse historier, både sivile og kriminelle.</p></details>
+        <details><summary>Hvordan blir jeg med?</summary><p>Opprett profil i spillerpanelet, les regelverket og send whitelist-søknad. Når du er godkjent, kobler du til via play.novexrp.no.</p></details>
+        <details><summary>Hva er aldersgrensen?</summary><p>16 år. Søkere under 18 må vise moden RP i søknaden.</p></details>
+        <details><summary>Må jeg kunne norsk?</summary><p>Ja. All RP på serveren foregår på norsk.</p></details>
+        <details><summary>Hvordan søker jeg jobb eller starter gjeng?</summary><p>Under Stillinger i spillerpanelet finner du etater, bedrifter og egne søknader for bedrift, gjeng og staff.</p></details>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ================= OTHER ROUTES ================= -->
+<div id="app" hidden></div>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <a class="logo" href="#hjem"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="3" fill="#e0141f"/><path d="M10 31V9h4.5l11 13.5V9H30v22h-4.5L14.5 17.5V31z" fill="#fff"/></svg><div><span>NOVEX</span><small>ROLEPLAY</small></div></a>
+        <p>Project Novex er en whitelistet norsk FiveM-server for spillere som vil ha meningsfylt rollespill.</p>
+      </div>
+      <div><h4>Spill</h4><a href="#koble-til">Koble til</a><a href="#regler">Regelverk</a><a href="#whitelist">Søk whitelist</a></div>
+      <div><h4>Byen</h4><a href="#bedrifter">Bedrifter og etater</a><a href="#stillinger">Stillinger</a><a href="#panel">Spillerpanel</a></div>
+      <div><h4>Kontakt</h4><a href="#tickets">Support og tickets</a><a href="#" id="discordLink" target="_blank" rel="noopener">Discord</a></div>
+    </div>
+    <div class="fbottom"><span>© 2026 Project Novex RP. Ikke tilknyttet Rockstar Games eller Cfx.re.</span><span class="mono" id="fConnect">connect play.novexrp.no</span></div>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="forms.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

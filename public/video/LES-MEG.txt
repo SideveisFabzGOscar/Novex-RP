@@ -1,0 +1,16 @@
+Egne videoklipp til «Novex på film» på forsiden.
+
+Legg opptak fra serveren her:
+klipp1.mp4  Trailer (ligger her allerede)
+klipp2.mp4  Nattkjøring
+klipp3.mp4  Byen ovenfra
+klipp4.mp4  Gateplan
+
+Finnes ikke filen, vises 3D-klippet i stedet. Navn og undertekst på klippene
+endrer du i listen CLIPS øverst i public/app.js.
+
+Tips:
+- Bruk MP4 (H.264). Hold hvert klipp under 30 MB, gjerne 10–20 sekunder.
+- Klippene spilles uten lyd.
+- Novex-logoen legges over videoen automatisk, så den trenger ikke være med i opptaket.
+- Bruk bare opptak fra deres egen server.

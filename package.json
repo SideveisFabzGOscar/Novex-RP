@@ -1,0 +1,13 @@
+{
+  "name": "novex-rp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nettside og spillerpanel for Project Novex RP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
