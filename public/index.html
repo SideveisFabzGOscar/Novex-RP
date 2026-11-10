@@ -396,6 +396,24 @@ td small{display:block;color:var(--muted)}
 .li b{font-weight:700}
 .li small{color:var(--muted)}
 
+/* ticket-lister */
+.ttools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.ttools input{flex:1 1 260px;max-width:440px}
+.tsort{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted);font-weight:600}
+.tsort select{width:auto;padding:9px 12px;font-size:15px}
+.tabs button .mono{font-size:12px;opacity:.6;margin-left:4px}
+.li.tk small{width:100%}
+.tlast{display:block;width:100%;font-size:14px;color:var(--ink2);border-left:3px solid var(--line2);padding:4px 0 4px 10px;overflow-wrap:anywhere}
+.tlast.st{border-left-color:var(--red)}
+.tlast b{font-weight:700}
+.az{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px}
+.az a{min-width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--line2);border-radius:4px;text-decoration:none;font-weight:700;font-size:14px;background:#fff}
+.az a:hover{border-color:var(--ink);background:var(--ink);color:#fff}
+.tgroup{scroll-margin-top:90px}
+.tgroup+.tgroup{margin-top:20px}
+.letter{display:flex;align-items:baseline;gap:10px;font-family:var(--display);font-weight:900;font-size:34px;line-height:1;margin-bottom:10px;color:var(--ink)}
+.letter span{font-family:var(--mono);font-size:13px;font-weight:400;color:var(--muted)}
+
 /* staff-team */
 .perms{display:grid;gap:8px}
 .perm{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line2);border-radius:6px;padding:12px 14px;cursor:pointer;background:#fff}
@@ -442,7 +460,7 @@ td small{display:block;color:var(--muted)}
 .q label .req{color:var(--muted);font-weight:400}
 .q .hint{color:var(--muted);font-size:14px}
 .q .err{color:var(--bad);font-size:14px;font-weight:600}
-input[type=text],input[type=number],select,textarea{width:100%;background:#fff;border:1.5px solid var(--line2);border-radius:4px;padding:11px 13px;font-size:16px;color:var(--ink)}
+input[type=text],input[type=search],input[type=number],select,textarea{width:100%;background:#fff;border:1.5px solid var(--line2);border-radius:4px;padding:11px 13px;font-size:16px;color:var(--ink)}
 input.short,select.short{max-width:440px}
 textarea{min-height:130px;resize:vertical}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px var(--redsoft)}

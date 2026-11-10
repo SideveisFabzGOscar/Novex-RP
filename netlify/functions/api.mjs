@@ -172,8 +172,19 @@ const appOut = (a) => ({
 });
 const ticketOut = (C, t) => ({
   id: t.id, subject: t.subject, category: t.category, status: t.status, createdAt: t.created_at, updatedAt: t.updated_at,
-  channelUrl: t.channel_id && C.guildId ? `https://discord.com/channels/${C.guildId}/${t.channel_id}` : null
+  channelUrl: t.channel_id && C.guildId ? `https://discord.com/channels/${C.guildId}/${t.channel_id}` : null,
+  messages: (t.msgs || []).length, replies: (t.msgs || []).filter((m) => m.is_staff).length
 });
+/* siste melding i en ticket, til forhåndsvisning i listene */
+function lastOut(t, people, showStaffName) {
+  const m = (t.msgs || [])[(t.msgs || []).length - 1];
+  if (!m) return null;
+  const p = people[m.user_id];
+  return { staff: !!m.is_staff, name: m.is_staff ? (showStaffName && p ? p.name || p.username : 'Novex Staff') : (p ? p.name || p.username : 'Spiller'), body: m.body.slice(0, 160), at: m.created_at, source: m.source || 'web' };
+}
+async function peopleOf(db, ids) {
+  return Object.fromEntries((await Promise.all([...new Set(ids)].map((id) => DB.get(db, 'users/' + id)))).filter(Boolean).map((u) => [u.id, u]));
+}
 async function upsertDiscordUser(db, d, roleStaff) {
   const now = Date.now();
   const old = await DB.get(db, 'users/' + d.id);
@@ -579,7 +590,11 @@ async function accessTicket(db, user, id) {
   if (!t || (t.user_id !== user.id && !can(user, 'tickets.view'))) fail(404, 'Fant ikke ticketen.');
   return t;
 }
-route('GET', '/api/tickets', async ({ C, db, user }) => ({ tickets: (await DB.all(db, `tickets/${user.id}/`)).sort((a, b) => b.updated_at - a.updated_at).map((t) => ticketOut(C, t)) }), { auth: 'user' });
+route('GET', '/api/tickets', async ({ C, db, user }) => {
+  const list = (await DB.all(db, `tickets/${user.id}/`)).sort((a, b) => b.updated_at - a.updated_at);
+  const people = await peopleOf(db, list.map((t) => { const m = (t.msgs || []).slice(-1)[0]; return m ? m.user_id : t.user_id; }));
+  return { tickets: list.map((t) => ({ ...ticketOut(C, t), last: lastOut(t, people, false) })) };
+}, { auth: 'user' });
 route('POST', '/api/tickets', async ({ C, db, user, body }) => ({ ticket: ticketOut(C, await createTicket(C, db, user, body.category, body.subject, body.body)) }), { auth: 'user' });
 route('GET', '/api/tickets/:id', async ({ C, db, user, params }) => {
   const t = await accessTicket(db, user, params.id);
@@ -657,13 +672,10 @@ route('POST', '/api/staff/apps/:id/decide', async ({ C, db, user, params, body }
 }, { auth: 'staff' });
 route('GET', '/api/staff/tickets', async ({ C, db, url, user }) => {
   if (!can(user, 'tickets.view')) return { tickets: [] };
-  const all = url.searchParams.get('vis') === 'alle';
-  const order = { apen: 0, besvart: 1, lukket: 2 };
-  let tickets = (await DB.all(db, 'tickets/')).filter((t) => all || t.status !== 'lukket');
-  tickets.sort((a, b) => (order[a.status] - order[b.status]) || b.updated_at - a.updated_at);
-  tickets = tickets.slice(0, 200);
-  const people = Object.fromEntries((await Promise.all([...new Set(tickets.map((t) => t.user_id))].map((id) => DB.get(db, 'users/' + id)))).filter(Boolean).map((u) => [u.id, u]));
-  return { tickets: tickets.map((t) => ({ ...ticketOut(C, t), user: { id: t.user_id, name: people[t.user_id] ? people[t.user_id].name || people[t.user_id].username : 'Ukjent' } })) };
+  /* alle tickets, også lukkede, så staff kan gå tilbake i historikken. Filtrering og sortering skjer i panelet. */
+  let tickets = (await DB.all(db, 'tickets/')).sort((a, b) => b.updated_at - a.updated_at).slice(0, 500);
+  const people = await peopleOf(db, tickets.flatMap((t) => [t.user_id, ((t.msgs || []).slice(-1)[0] || {}).user_id].filter(Boolean)));
+  return { tickets: tickets.map((t) => { const u = people[t.user_id]; return { ...ticketOut(C, t), last: lastOut(t, people, true), user: { id: t.user_id, name: u ? u.name || u.username : 'Ukjent', username: u ? u.username : '', avatarUrl: avatarUrl(t.user_id, u && u.avatar) } }; }) };
 }, { auth: 'staff' });
 route('POST', '/api/staff/discord/register', async ({ C, user }) => {
   need(user, 'discord.manage', 'Du trenger rettigheten «Discord-oppsett».');

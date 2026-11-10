@@ -489,7 +489,7 @@ const STATUS={utkast:'Utkast',sendt:'Til behandling',godkjent:'Godkjent',avslatt
 const TSTATUS={apen:'Venter på staff',besvart:'Besvart',lukket:'Lukket'};
 const CFG={connect:'play.novexrp.no',invite:'',trailer:'',loginEnabled:true};
 const ST={ready:false,user:null,apps:[],tickets:[]};
-const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apne',team:null,teamLoading:false,tEdit:null,tFound:null};
+const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apen',tSort:'nyeste',tQ:'',myT:'alle',mySort:'nyeste',myQ:'',team:null,teamLoading:false,tEdit:null,tFound:null};
 const tno=id=>1000+Number(id);
 const app=$('#app');
 const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff','team'];
@@ -685,7 +685,7 @@ ${CFG.discordTickets?`<div class="notice" style="margin-top:20px"><span>Du kan o
     <div class="q" style="padding:0;border:0"><label for="tBody">Beskrivelse</label><textarea id="tBody" maxlength="4000" placeholder="Hva skjedde? Ta med tidspunkt, navn og lenke til klipp."></textarea><span class="err" id="tErr" hidden></span></div>
     <div class="row"><button class="btn red" id="tSend">Send ticket</button><button class="btn ghost" id="tCancel">Avbryt</button></div>
   </div>`:`<div style="margin-top:22px"><button class="btn red" data-newt>Ny ticket</button></div>`}
-  <div style="margin-top:22px">${list.length?`<div class="list">${list.map(t=>`<button class="li" data-ticket="${t.id}"><span class="l"><span class="mono muted">#${tno(t.id)}</span><b>${esc(t.subject)}</b>${tpill(t.status)}</span><small>${esc(t.category)} · ${fdate(t.createdAt)}</small></button>`).join('')}</div>`
+  <div style="margin-top:22px">${list.length?ticketTools(list,false)
   :V.newT?'':`<div class="empty"><h3>Du har ingen tickets</h3><p>Trenger du hjelp eller vil rapportere noe, oppretter du en ticket her.</p><button class="btn red" data-newt>Opprett en ticket</button></div>`}</div>`;
 }
 
@@ -710,10 +710,48 @@ async function loadTicket(){
 async function loadStaff(){
   if(V.staffLoading)return;V.staffLoading=true;
   try{
-    const [ov,ap,tk]=await Promise.all([api('GET','/api/staff/overview'),api('GET','/api/staff/apps?vis='+(V.staffTab==='venter'?'venter':'behandlet')),api('GET','/api/staff/tickets?vis='+(V.staffT==='alle'?'alle':'apne'))]);
+    const [ov,ap,tk]=await Promise.all([api('GET','/api/staff/overview'),api('GET','/api/staff/apps?vis='+(V.staffTab==='venter'?'venter':'behandlet')),api('GET','/api/staff/tickets')]);
     V.staff={overview:ov,apps:ap.apps,tickets:tk.tickets};
   }catch(e){errToast(e);V.staff={overview:{},apps:[],tickets:[]}}
   V.staffLoading=false;if(route==='staff')refresh();
+}
+/* ---------- ticket-lister: filtrer på status, søk, sorter etter navn A–Å ---------- */
+const TFILTER=[['apen','Venter'],['besvart','Besvart'],['lukket','Lukket'],['alle','Alle']];
+const collate=new Intl.Collator('nb',{sensitivity:'base',numeric:true});
+function tcfg(staff){return staff?{f:'staffT',s:'tSort',q:'tQ'}:{f:'myT',s:'mySort',q:'myQ'}}
+function tSortName(t,staff){return staff?(t.user&&t.user.name)||'':t.subject||''}
+function filterTickets(list,staff){
+  const c=tcfg(staff),f=V[c.f],q=V[c.q].trim().toLowerCase().replace(/^#/,'');
+  let out=list.filter(t=>f==='alle'||t.status===f);
+  if(q)out=out.filter(t=>[t.subject,t.category,String(tno(t.id)),staff&&t.user?t.user.name:'',staff&&t.user?t.user.username:'',t.last?t.last.body:''].some(v=>String(v||'').toLowerCase().includes(q)));
+  const so=V[c.s];
+  if(so==='navn'||so==='navn-z'){out.sort((a,b)=>collate.compare(tSortName(a,staff),tSortName(b,staff))||b.updatedAt-a.updatedAt);if(so==='navn-z')out.reverse()}
+  else if(so==='eldste')out.sort((a,b)=>a.updatedAt-b.updatedAt);
+  else out.sort((a,b)=>b.updatedAt-a.updatedAt);
+  return out;
+}
+function letterOf(n){const ch=(n||'').trim().charAt(0).toLocaleUpperCase('nb');return /\p{L}/u.test(ch)?ch:'#'}
+function ticketRow(t,staff){
+  const l=t.last,attr=staff?`data-sticket="${t.id}"`:`data-ticket="${t.id}"`;
+  const lastLine=l&&t.messages>1?`<span class="tlast ${l.staff?'st':''}"><b>${l.staff?'Svar fra '+esc(l.name):esc(l.name)}:</b> ${esc(l.body)}${l.body.length>=160?' …':''}</span>`:'';
+  return `<button class="li tk" ${attr}><span class="l"><span class="mono muted">#${tno(t.id)}</span><b>${esc(t.subject)}</b>${tpill(t.status)}</span><small>${esc(t.category)}${staff?' · '+esc(t.user.name):''} · ${t.messages} ${t.messages===1?'melding':'meldinger'}${t.replies?` · ${t.replies} svar fra staff`:' · ikke svart ennå'} · ${fdate(t.updatedAt)}</small>${lastLine}</button>`;
+}
+function ticketListHtml(list,staff){
+  const c=tcfg(staff),out=filterTickets(list,staff),so=V[c.s];
+  if(!out.length)return `<p class="muted" style="margin-top:6px">${V[c.q].trim()?'Ingen tickets passer søket.':V[c.f]==='alle'?'Ingen tickets.':'Ingen tickets her.'}</p>`;
+  if(so==='navn'||so==='navn-z'){
+    const groups=[];out.forEach(t=>{const k=letterOf(tSortName(t,staff));const g=groups[groups.length-1];if(g&&g.k===k)g.items.push(t);else groups.push({k,items:[t]})});
+    return `<nav class="az" aria-label="Hopp til bokstav">${groups.map(g=>`<a href="#" data-az="${esc(g.k)}">${esc(g.k)}</a>`).join('')}</nav>`+groups.map(g=>`<div class="tgroup" id="az-${staff?'s':'m'}-${esc(g.k)}"><div class="letter">${esc(g.k)}<span>${g.items.length}</span></div><div class="list">${g.items.map(t=>ticketRow(t,staff)).join('')}</div></div>`).join('');
+  }
+  return `<div class="list">${out.map(t=>ticketRow(t,staff)).join('')}</div>`;
+}
+function ticketTools(list,staff){
+  const c=tcfg(staff),cnt=k=>k==='alle'?list.length:list.filter(t=>t.status===k).length;
+  const az=staff?'Spiller A–Å':'Emne A–Å',za=staff?'Spiller Å–A':'Emne Å–A';
+  return `<div class="tabs">${TFILTER.map(([k,n])=>`<button data-tf="${k}" data-staffl="${staff?1:0}" class="${V[c.f]===k?'on':''}">${n} <span class="mono">${cnt(k)}</span></button>`).join('')}</div>
+  <div class="ttools"><input type="search" id="${staff?'tQs':'tQm'}" placeholder="${staff?'Søk etter spiller, emne eller #nummer':'Søk i ticketene dine'}" value="${esc(V[c.q])}" maxlength="60" autocomplete="off">
+  <label class="tsort"><span>Sorter</span><select id="${staff?'tSs':'tSm'}">${[['nyeste','Nyeste først'],['eldste','Eldste først'],['navn',az],['navn-z',za]].map(([v,n])=>`<option value="${v}" ${V[c.s]===v?'selected':''}>${n}</option>`).join('')}</select></label></div>
+  <div id="${staff?'tkS':'tkM'}" style="margin-top:14px">${ticketListHtml(list,staff)}</div>`;
 }
 function pStaff(){
   const s=V.staff;
@@ -735,8 +773,7 @@ function pStaff(){
   <div class="tabs"><button data-stab="venter" class="${V.staffTab==='venter'?'on':''}">Venter</button><button data-stab="behandlet" class="${V.staffTab==='behandlet'?'on':''}">Behandlet</button></div>
   <div class="stack">${s.apps.length?s.apps.map(appCard).join(''):`<p class="muted">${V.staffTab==='venter'?'Ingen søknader venter.':'Ingen behandlede søknader ennå.'}</p>`}</div>`:''}
   ${can('tickets.view')?`<div class="ghead">Tickets</div>
-  <div class="tabs"><button data-stt="apne" class="${V.staffT==='apne'?'on':''}">Åpne</button><button data-stt="alle" class="${V.staffT==='alle'?'on':''}">Alle</button></div>
-  <div class="list" style="margin-top:14px">${s.tickets.length?s.tickets.map(t=>`<button class="li" data-sticket="${t.id}"><span class="l"><span class="mono muted">#${tno(t.id)}</span><b>${esc(t.subject)}</b>${tpill(t.status)}</span><small>${esc(t.category)} · ${esc(t.user.name)} · ${fdate(t.updatedAt)}</small></button>`).join(''):`<p class="muted">Ingen tickets.</p>`}</div>`:''}
+  ${ticketTools(s.tickets,true)}`:''}
   ${!anyApps&&!can('tickets.view')?'<div class="empty" style="margin-top:28px"><h3>Ingen oppgaver ennå</h3><p>Du er staff, men har ikke fått rettigheter til søknader eller tickets. Spør eieren.</p></div>':''}`;
 }
 
@@ -832,7 +869,8 @@ document.addEventListener('click',async e=>{
   if(d.go){go(d.go);return}
   if(d.tab){V.tab=d.tab;render(true);return}
   if(d.stab){V.staffTab=d.stab;V.staff=null;render(true);return}
-  if(d.stt){V.staffT=d.stt;V.staff=null;render(true);return}
+  if(d.tf){V[tcfg(d.staffl==='1').f]=d.tf;render(true);return}
+  if(d.az){e.preventDefault();const el2=document.getElementById('az-'+(el.closest('#tkS')?'s':'m')+'-'+d.az);if(el2)el2.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
   if('newt' in d){V.newT=true;render(true);const s=$('#tSub');if(s)s.focus();return}
   if(d.ticket||d.sticket){V.ticket=Number(d.ticket||d.sticket);V.ticketFrom=d.sticket?'staff':'tickets';V.ticketData=null;go('ticket');return}
   if(d.pick){const p=(V.tFound||[]).find(x=>x.id===d.pick);if(p){V.tEdit={id:p.id,name:p.name,avatarUrl:p.avatarUrl,title:'',perms:[],isNew:true};V.tFound=null;render(true);const t=$('#tmTitle');if(t)t.focus()}return}
@@ -894,7 +932,12 @@ document.addEventListener('click',async e=>{
   }
 });
 app.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='tmQ'){e.preventDefault();teamFind()}});
-app.addEventListener('change',e=>{if(e.target.dataset&&e.target.dataset.perm)readEdit()});
+function redrawTickets(staff){const box=$(staff?'#tkS':'#tkM');if(!box)return;const list=staff?(V.staff&&V.staff.tickets)||[]:ST.tickets;box.innerHTML=ticketListHtml(list,staff)}
+app.addEventListener('input',e=>{const id=e.target.id;if(id==='tQs'||id==='tQm'){const st=id==='tQs';V[tcfg(st).q]=e.target.value;redrawTickets(st)}});
+app.addEventListener('change',e=>{
+  if(e.target.dataset&&e.target.dataset.perm){readEdit();return}
+  const id=e.target.id;if(id==='tSs'||id==='tSm'){const st=id==='tSs';V[tcfg(st).s]=e.target.value;redrawTickets(st)}
+});
 app.addEventListener('input',e=>{
   if(e.target.id==='tmTitle'&&V.tEdit){V.tEdit.title=e.target.value;return}
   if(!e.target.closest('#appForm'))return;
