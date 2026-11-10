@@ -492,7 +492,7 @@ const ST={ready:false,user:null,apps:[],tickets:[]};
 const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apen',tSort:'nyeste',tQ:'',myT:'alle',mySort:'nyeste',myQ:'',team:null,teamLoading:false,tEdit:null,tFound:null};
 const tno=id=>1000+Number(id);
 const app=$('#app');
-const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff','team'];
+const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff','team','arkiv'];
 let route='hjem';
 
 async function api(method,url,body){
@@ -560,6 +560,7 @@ function updateNav(){
   const add=(r,label,n)=>{const a=document.createElement('a');a.href='#'+r;a.dataset.r=r;a.className='dyn'+(cur===r?' on':'');a.textContent=label;if(n){const b=document.createElement('span');b.className='ncount';b.textContent=n;a.append(b)}L.append(a)};
   add('panel','Spillerpanel');
   if(ST.user.isStaff){const o=(V.staff&&V.staff.overview)||V.ov;add('staff','Staff',o?(o.pending||0)+(o.openTickets||0):0)}
+  if(can('tickets.view'))add('arkiv','Alle tickets');
   if(can('staff.manage'))add('team','Staff-team');
 }
 function render(keepScroll){
@@ -578,7 +579,7 @@ function render(keepScroll){
   app.innerHTML=html;bindTilt(app);
   if(!keepScroll)scrollTo(0,0);
   if(ST.user){
-    if(route==='staff'&&ST.user.isStaff&&!V.staff)loadStaff();
+    if((route==='staff'||route==='arkiv')&&ST.user.isStaff&&!V.staff)loadStaff();
     if(route==='team'&&can('staff.manage')&&!V.team)loadTeam();
     if(route==='ticket'&&V.ticket&&(!V.ticketData||V.ticketData.ticket.id!==V.ticket))loadTicket();
   }
@@ -607,9 +608,10 @@ function vPanel(){
   const u=ST.user,openT=ST.tickets.filter(t=>t.status!=='lukket').length;
   const nav=[['panel','Oversikt'],['soknader','Mine søknader',ST.apps.length],['whitelist','Whitelist'],['stillinger','Stillinger'],['tickets','Tickets',openT]];
   if(u.isStaff)nav.push(['staff','Staff',V.staff&&V.staff.overview?V.staff.overview.pending:0]);
+  if(can('tickets.view'))nav.push(['arkiv','Alle tickets']);
   if(can('staff.manage'))nav.push(['team','Staff-team']);
   const act=route==='soknad'?'soknader':route==='ticket'?V.ticketFrom:route;
-  const views={panel:pOverview,soknader:pApps,whitelist:pWhitelist,stillinger:pJobs,tickets:pTickets,soknad:pForm,ticket:pTicket,staff:()=>u.isStaff?pStaff():pOverview(),team:()=>can('staff.manage')?pTeam():pOverview()};
+  const views={panel:pOverview,soknader:pApps,whitelist:pWhitelist,stillinger:pJobs,tickets:pTickets,soknad:pForm,ticket:pTicket,staff:()=>u.isStaff?pStaff():pOverview(),team:()=>can('staff.manage')?pTeam():pOverview(),arkiv:()=>can('tickets.view')?pArchive():pOverview()};
   return `<div class="wrap panel">
     <aside class="side">
       <div class="who">${avatar(u)}<div><b>${esc(u.name)}</b><small>${u.isStaff?esc(u.staffTitle||'Staff'):'Spillerpanel'}</small></div></div>
@@ -702,7 +704,7 @@ ${CFG.discordTickets?`<div class="notice" style="margin-top:20px"><span>Du kan o
 
 function pTicket(){
   const d=V.ticketData,from=V.ticketFrom;
-  const back=`<button class="back" data-go="${from}">${from==='staff'?'Staff':'Mine tickets'}</button>`;
+  const back=`<button class="back" data-go="${from}">${from==='staff'?'Staff':from==='arkiv'?'Alle tickets':'Mine tickets'}</button>`;
   if(!d||d.ticket.id!==V.ticket)return back+loading('Henter ticketen …');
   const t=d.ticket,asStaff=can('tickets.view')&&!d.isOwner,mayClose=d.isOwner||can('tickets.close');
   return back+`<h1 class="ph" style="margin-top:14px">${esc(t.subject)}</h1>
@@ -724,45 +726,60 @@ async function loadStaff(){
     const [ov,ap,tk]=await Promise.all([api('GET','/api/staff/overview'),api('GET','/api/staff/apps?vis='+(V.staffTab==='venter'?'venter':'behandlet')),api('GET','/api/staff/tickets')]);
     V.staff={overview:ov,apps:ap.apps,tickets:tk.tickets};
   }catch(e){errToast(e);V.staff={overview:{},apps:[],tickets:[]}}
-  V.staffLoading=false;if(route==='staff')refresh();
+  V.staffLoading=false;if(route==='staff'||route==='arkiv')refresh();
 }
-/* ---------- ticket-lister: filtrer på status, søk, sorter etter navn A–Å ---------- */
+/* ---------- ticket-lister: filtrer på status, søk, sorter etter navn A–Å ----------
+   m = 'm' (mine tickets), 's' (staff-siden), 'a' (alle tickets / arkiv) */
 const TFILTER=[['apen','Venter'],['besvart','Besvart'],['lukket','Lukket'],['alle','Alle']];
 const collate=new Intl.Collator('nb',{sensitivity:'base',numeric:true});
-function tcfg(staff){return staff?{f:'staffT',s:'tSort',q:'tQ'}:{f:'myT',s:'mySort',q:'myQ'}}
-function tSortName(t,staff){return staff?(t.user&&t.user.name)||'':t.subject||''}
-function filterTickets(list,staff){
-  const c=tcfg(staff),f=V[c.f],q=V[c.q].trim().toLowerCase().replace(/^#/,'');
-  let out=list.filter(t=>f==='alle'||t.status===f);
-  if(q)out=out.filter(t=>[t.subject,t.category,String(tno(t.id)),staff&&t.user?t.user.name:'',staff&&t.user?t.user.username:'',t.last?t.last.body:''].some(v=>String(v||'').toLowerCase().includes(q)));
-  const so=V[c.s];
-  if(so==='navn'||so==='navn-z'){out.sort((a,b)=>collate.compare(tSortName(a,staff),tSortName(b,staff))||b.updatedAt-a.updatedAt);if(so==='navn-z')out.reverse()}
-  else if(so==='eldste')out.sort((a,b)=>a.updatedAt-b.updatedAt);
+const TK={m:{f:'alle',s:'nyeste',q:'',c:''},s:{f:'apen',s:'nyeste',q:'',c:''},a:{f:'alle',s:'nyeste',q:'',c:''}};
+const isStaffList=m=>m!=='m';
+function tSortName(t,m){return isStaffList(m)?(t.user&&t.user.name)||'':t.subject||''}
+function filterTickets(list,m){
+  const c=TK[m],q=c.q.trim().toLowerCase().replace(/^#/,''),st=isStaffList(m);
+  let out=list.filter(t=>(c.f==='alle'||t.status===c.f)&&(!c.c||t.category===c.c));
+  if(q)out=out.filter(t=>[t.subject,t.category,String(tno(t.id)),st&&t.user?t.user.name:'',st&&t.user?t.user.username:'',st&&t.user?t.user.id:'',t.last?t.last.body:''].some(v=>String(v||'').toLowerCase().includes(q)));
+  if(c.s==='navn'||c.s==='navn-z'){out.sort((a,b)=>collate.compare(tSortName(a,m),tSortName(b,m))||b.updatedAt-a.updatedAt);if(c.s==='navn-z')out.reverse()}
+  else if(c.s==='eldste')out.sort((a,b)=>a.createdAt-b.createdAt);
+  else if(c.s==='nummer')out.sort((a,b)=>b.id-a.id);
   else out.sort((a,b)=>b.updatedAt-a.updatedAt);
   return out;
 }
 function letterOf(n){const ch=(n||'').trim().charAt(0).toLocaleUpperCase('nb');return /\p{L}/u.test(ch)?ch:'#'}
-function ticketRow(t,staff){
-  const l=t.last,attr=staff?`data-sticket="${t.id}"`:`data-ticket="${t.id}"`;
+function ticketRow(t,m){
+  const l=t.last,st=isStaffList(m),attr=st?`data-sticket="${t.id}" data-from="${m==='a'?'arkiv':'staff'}"`:`data-ticket="${t.id}"`;
   const lastLine=l&&t.messages>1?`<span class="tlast ${l.staff?'st':''}"><b>${l.staff?'Svar fra '+esc(l.name):esc(l.name)}:</b> ${esc(l.body)}${l.body.length>=160?' …':''}</span>`:'';
-  return `<button class="li tk" ${attr}><span class="l"><span class="mono muted">#${tno(t.id)}</span><b>${esc(t.subject)}</b>${tpill(t.status)}</span><small>${esc(t.category)}${staff?' · '+esc(t.user.name):''} · ${t.messages} ${t.messages===1?'melding':'meldinger'}${t.replies?` · ${t.replies} svar fra staff`:' · ikke svart ennå'} · ${fdate(t.updatedAt)}</small>${lastLine}</button>`;
+  return `<button class="li tk" ${attr}><span class="l"><span class="mono muted">#${tno(t.id)}</span><b>${esc(t.subject)}</b>${tpill(t.status)}</span><small>${esc(t.category)}${st?' · '+esc(t.user.name):''} · ${t.messages} ${t.messages===1?'melding':'meldinger'}${t.replies?` · ${t.replies} svar fra staff`:' · ikke svart ennå'} · opprettet ${fdate(t.createdAt)}${t.updatedAt-t.createdAt>60000?` · sist aktiv ${fdate(t.updatedAt)}`:''}</small>${lastLine}</button>`;
 }
-function ticketListHtml(list,staff){
-  const c=tcfg(staff),out=filterTickets(list,staff),so=V[c.s];
-  if(!out.length)return `<p class="muted" style="margin-top:6px">${V[c.q].trim()?'Ingen tickets passer søket.':V[c.f]==='alle'?'Ingen tickets.':'Ingen tickets her.'}</p>`;
-  if(so==='navn'||so==='navn-z'){
-    const groups=[];out.forEach(t=>{const k=letterOf(tSortName(t,staff));const g=groups[groups.length-1];if(g&&g.k===k)g.items.push(t);else groups.push({k,items:[t]})});
-    return `<nav class="az" aria-label="Hopp til bokstav">${groups.map(g=>`<a href="#" data-az="${esc(g.k)}">${esc(g.k)}</a>`).join('')}</nav>`+groups.map(g=>`<div class="tgroup" id="az-${staff?'s':'m'}-${esc(g.k)}"><div class="letter">${esc(g.k)}<span>${g.items.length}</span></div><div class="list">${g.items.map(t=>ticketRow(t,staff)).join('')}</div></div>`).join('');
+function ticketListHtml(list,m){
+  const c=TK[m],out=filterTickets(list,m);
+  if(!out.length)return `<p class="muted" style="margin-top:6px">${c.q.trim()||c.c?'Ingen tickets passer søket.':c.f==='alle'?'Ingen tickets.':'Ingen tickets her.'}</p>`;
+  const head=`<p class="muted" style="font-size:14px;margin-bottom:10px">Viser ${out.length} av ${list.length} tickets</p>`;
+  if(c.s==='navn'||c.s==='navn-z'){
+    const groups=[];out.forEach(t=>{const k=letterOf(tSortName(t,m));const g=groups[groups.length-1];if(g&&g.k===k)g.items.push(t);else groups.push({k,items:[t]})});
+    return head+`<nav class="az" aria-label="Hopp til bokstav">${groups.map(g=>`<a href="#" data-az="${esc(g.k)}" data-tm="${m}">${esc(g.k)}</a>`).join('')}</nav>`+groups.map(g=>`<div class="tgroup" id="az-${m}-${esc(g.k)}"><div class="letter">${esc(g.k)}<span>${g.items.length}</span></div><div class="list">${g.items.map(t=>ticketRow(t,m)).join('')}</div></div>`).join('');
   }
-  return `<div class="list">${out.map(t=>ticketRow(t,staff)).join('')}</div>`;
+  return head+`<div class="list">${out.map(t=>ticketRow(t,m)).join('')}</div>`;
 }
-function ticketTools(list,staff){
-  const c=tcfg(staff),cnt=k=>k==='alle'?list.length:list.filter(t=>t.status===k).length;
-  const az=staff?'Spiller A–Å':'Emne A–Å',za=staff?'Spiller Å–A':'Emne Å–A';
-  return `<div class="tabs">${TFILTER.map(([k,n])=>`<button data-tf="${k}" data-staffl="${staff?1:0}" class="${V[c.f]===k?'on':''}">${n} <span class="mono">${cnt(k)}</span></button>`).join('')}</div>
-  <div class="ttools"><input type="search" id="${staff?'tQs':'tQm'}" placeholder="${staff?'Søk etter spiller, emne eller #nummer':'Søk i ticketene dine'}" value="${esc(V[c.q])}" maxlength="60" autocomplete="off">
-  <label class="tsort"><span>Sorter</span><select id="${staff?'tSs':'tSm'}">${[['nyeste','Nyeste først'],['eldste','Eldste først'],['navn',az],['navn-z',za]].map(([v,n])=>`<option value="${v}" ${V[c.s]===v?'selected':''}>${n}</option>`).join('')}</select></label></div>
-  <div id="${staff?'tkS':'tkM'}" style="margin-top:14px">${ticketListHtml(list,staff)}</div>`;
+function ticketTools(list,m){
+  if(m===true)m='s';else if(m===false)m='m';
+  const c=TK[m],st=isStaffList(m),cnt=k=>k==='alle'?list.length:list.filter(t=>t.status===k).length;
+  const sorts=[['nyeste','Sist aktiv først'],['eldste','Eldste først'],['nummer','Nyeste nummer først'],['navn',st?'Spiller A–Å':'Emne A–Å'],['navn-z',st?'Spiller Å–A':'Emne Å–A']];
+  return `<div class="tabs">${TFILTER.map(([k,n])=>`<button data-tf="${k}" data-tm="${m}" class="${c.f===k?'on':''}">${n} <span class="mono">${cnt(k)}</span></button>`).join('')}</div>
+  <div class="ttools"><input type="search" id="tQ-${m}" data-tm="${m}" placeholder="${st?'Søk etter spiller, Discord-ID, emne eller #nummer':'Søk i ticketene dine'}" value="${esc(c.q)}" maxlength="60" autocomplete="off">
+  ${st?`<label class="tsort"><span>Kategori</span><select id="tC-${m}" data-tm="${m}"><option value="">Alle</option>${CATS.map(k=>`<option ${c.c===k?'selected':''}>${esc(k)}</option>`).join('')}</select></label>`:''}
+  <label class="tsort"><span>Sorter</span><select id="tS-${m}" data-tm="${m}">${sorts.map(([v,n])=>`<option value="${v}" ${c.s===v?'selected':''}>${n}</option>`).join('')}</select></label></div>
+  <div id="tk-${m}" style="margin-top:14px">${ticketListHtml(list,m)}</div>`;
+}
+function pArchive(){
+  const s=V.staff;
+  if(!s)return `<h1 class="ph">Alle tickets</h1>`+loading('Henter alle tickets …');
+  const t=s.tickets,n=k=>t.filter(x=>x.status===k).length;
+  const first=t.length?Math.min(...t.map(x=>x.createdAt)):null;
+  return `<div class="spread"><h1 class="ph">Alle tickets</h1><button class="btn sm" id="staffReload">Oppdater</button></div>
+  <p class="pintro">Alle tickets som er laget, fra nettsiden og fra Discord, også de som er lukket. Trykk på en ticket for å lese hele samtalen.${first?` Første ticket ble laget ${fdate(first)}.`:''}</p>
+  <div class="stats" style="margin-top:20px"><div class="stat"><b>${t.length}</b><span>Totalt</span></div><div class="stat"><b>${n('apen')}</b><span>Venter på svar</span></div><div class="stat"><b>${n('besvart')}</b><span>Besvart</span></div><div class="stat"><b>${n('lukket')}</b><span>Lukket</span></div></div>
+  <div style="margin-top:10px">${ticketTools(t,'a')}</div>`;
 }
 function pStaff(){
   const s=V.staff;
@@ -783,7 +800,7 @@ function pStaff(){
   ${anyApps?`<div class="ghead">Søknader</div>
   <div class="tabs"><button data-stab="venter" class="${V.staffTab==='venter'?'on':''}">Venter</button><button data-stab="behandlet" class="${V.staffTab==='behandlet'?'on':''}">Behandlet</button></div>
   <div class="stack">${s.apps.length?s.apps.map(appCard).join(''):`<p class="muted">${V.staffTab==='venter'?'Ingen søknader venter.':'Ingen behandlede søknader ennå.'}</p>`}</div>`:''}
-  ${can('tickets.view')?`<div class="ghead">Tickets</div>
+  ${can('tickets.view')?`<div class="ghead">Tickets</div><div style="margin-top:10px"><a class="btn sm ghost" href="#arkiv">Se alle tickets som er laget</a></div>
   ${ticketTools(s.tickets,true)}`:''}
   ${!anyApps&&!can('tickets.view')?'<div class="empty" style="margin-top:28px"><h3>Ingen oppgaver ennå</h3><p>Du er staff, men har ikke fått rettigheter til søknader eller tickets. Spør eieren.</p></div>':''}`;
 }
@@ -880,10 +897,10 @@ document.addEventListener('click',async e=>{
   if(d.go){go(d.go);return}
   if(d.tab){V.tab=d.tab;render(true);return}
   if(d.stab){V.staffTab=d.stab;V.staff=null;render(true);return}
-  if(d.tf){V[tcfg(d.staffl==='1').f]=d.tf;render(true);return}
-  if(d.az){e.preventDefault();const el2=document.getElementById('az-'+(el.closest('#tkS')?'s':'m')+'-'+d.az);if(el2)el2.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
+  if(d.tf){TK[d.tm].f=d.tf;render(true);return}
+  if(d.az){e.preventDefault();const el2=document.getElementById('az-'+d.tm+'-'+d.az);if(el2)el2.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
   if('newt' in d){V.newT=true;render(true);const s=$('#tSub');if(s)s.focus();return}
-  if(d.ticket||d.sticket){V.ticket=Number(d.ticket||d.sticket);V.ticketFrom=d.sticket?'staff':'tickets';V.ticketData=null;go('ticket');return}
+  if(d.ticket||d.sticket){V.ticket=Number(d.ticket||d.sticket);V.ticketFrom=d.sticket?(d.from||'staff'):'tickets';V.ticketData=null;go('ticket');return}
   if(d.pick){const p=(V.tFound||[]).find(x=>x.id===d.pick);if(p){V.tEdit={id:p.id,name:p.name,avatarUrl:p.avatarUrl,title:'',perms:[],isNew:true};V.tFound=null;render(true);const t=$('#tmTitle');if(t)t.focus()}return}
   if(d.tedit){const m=V.team.team.find(x=>x.id===d.tedit);if(m)openEdit(m);return}
   if(d.preset!==undefined){readEdit();const p=PRESETS[+d.preset];V.tEdit.perms=p.perms.filter(grantable);if(!V.tEdit.title.trim())V.tEdit.title=p.name;render(true);return}
@@ -943,11 +960,11 @@ document.addEventListener('click',async e=>{
   }
 });
 app.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='tmQ'){e.preventDefault();teamFind()}});
-function redrawTickets(staff){const box=$(staff?'#tkS':'#tkM');if(!box)return;const list=staff?(V.staff&&V.staff.tickets)||[]:ST.tickets;box.innerHTML=ticketListHtml(list,staff)}
-app.addEventListener('input',e=>{const id=e.target.id;if(id==='tQs'||id==='tQm'){const st=id==='tQs';V[tcfg(st).q]=e.target.value;redrawTickets(st)}});
+function redrawTickets(m){const box=$('#tk-'+m);if(!box)return;const list=m==='m'?ST.tickets:(V.staff&&V.staff.tickets)||[];box.innerHTML=ticketListHtml(list,m)}
+app.addEventListener('input',e=>{const id=e.target.id,m=e.target.dataset.tm;if(m&&id.startsWith('tQ-')){TK[m].q=e.target.value;redrawTickets(m)}});
 app.addEventListener('change',e=>{
   if(e.target.dataset&&e.target.dataset.perm){readEdit();return}
-  const id=e.target.id;if(id==='tSs'||id==='tSm'){const st=id==='tSs';V[tcfg(st).s]=e.target.value;redrawTickets(st)}
+  const id=e.target.id,m=e.target.dataset.tm;if(m&&id.startsWith('tS-')){TK[m].s=e.target.value;redrawTickets(m)}else if(m&&id.startsWith('tC-')){TK[m].c=e.target.value;redrawTickets(m)}
 });
 app.addEventListener('input',e=>{
   if(e.target.id==='tmTitle'&&V.tEdit){V.tEdit.title=e.target.value;return}
@@ -966,7 +983,7 @@ async function poll(){
     const m=await api('GET','/api/me');ST.user=m.user;if(!ST.user){refresh();return}
     await Promise.all([loadApps(),loadTickets(),loadOv()]);
     if(route==='ticket'&&V.ticket){V.ticketData=await api('GET','/api/tickets/'+V.ticket)}
-    if(route==='staff'){V.staff=null}
+    if(route==='staff'||route==='arkiv'){V.staff=null}
     refresh();
   }catch(e){}
 }

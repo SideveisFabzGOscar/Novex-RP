@@ -673,7 +673,7 @@ route('POST', '/api/staff/apps/:id/decide', async ({ C, db, user, params, body }
 route('GET', '/api/staff/tickets', async ({ C, db, url, user }) => {
   if (!can(user, 'tickets.view')) return { tickets: [] };
   /* alle tickets, også lukkede, så staff kan gå tilbake i historikken. Filtrering og sortering skjer i panelet. */
-  let tickets = (await DB.all(db, 'tickets/')).sort((a, b) => b.updated_at - a.updated_at).slice(0, 500);
+  let tickets = (await DB.all(db, 'tickets/')).sort((a, b) => b.updated_at - a.updated_at).slice(0, 3000);
   const people = await peopleOf(db, tickets.flatMap((t) => [t.user_id, ((t.msgs || []).slice(-1)[0] || {}).user_id].filter(Boolean)));
   return { tickets: tickets.map((t) => { const u = people[t.user_id]; return { ...ticketOut(C, t), last: lastOut(t, people, true), user: { id: t.user_id, name: u ? u.name || u.username : 'Ukjent', username: u ? u.username : '', avatarUrl: avatarUrl(t.user_id, u && u.avatar) } }; }) };
 }, { auth: 'staff' });
