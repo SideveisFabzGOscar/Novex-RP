@@ -52,22 +52,22 @@ Staff-team finnes foreløpig bare i Netlify-versjonen. `server.js` bruker fortsa
 
 ### Butikk: selg bedrifter
 
-Under **Butikk** kan spillere kjøpe bensinstasjoner, dagligvarebutikker, kafeer og mekanikerverksteder. Bedriftene, prisene og vilkårene står i `public/shop.js`.
+Under **Butikk** kan spillere kjøpe en bensinstasjon, dagligvarebutikk, kafé eller mekaniker, og velge selv hvor i byen den skal ligge (for eksempel Sandy Shores, Torget eller Paleto Bay). Typene, prisene, stedene og vilkårene står i `public/shop.js`.
 
 FiveM-avtalen (Cfx.re Creator PLA) sier at all betaling for en FiveM-server må gå gjennom **Tebex**. Vipps, Stripe, PayPal og lignende er ikke lov. Avtalen forbyr også salg av spillpenger og loot boxes. Derfor selger butikken én navngitt bedrift per kjøp, og kjøperen vet nøyaktig hva hen får.
 
 **Sett opp Tebex (gjøres av deg, siden det krever konto og bankinfo):**
 
 1. Lag en butikk på tebex.io og koble den til FiveM-serveren (`sv_tebexSecret` i `server.cfg`).
-2. Lag én pakke per bedrift i Tebex. Sett pris og **Purchase limit = 1**. Skriv hva kjøperen får i beskrivelsen.
-3. Lim pakke-ID-ene inn i `tebex`-feltet i `public/shop.js` og push.
+2. Lag én pakke per type i Tebex (Bensinstasjon, Dagligvare, Kafé, Mekaniker). Sett samme pris som i `public/shop.js`, og skriv hva kjøperen får i beskrivelsen.
+3. Lim pakke-ID-ene inn i `tebex`-feltet på hver type i `public/shop.js` og push.
 4. I Tebex: **Developers → Webhooks → Add endpoint** med adressen `https://<din-side>.netlify.app/api/tebex/webhook`. Huk av for `payment.completed`, `payment.refunded`, `payment.dispute.opened` og `payment.dispute.lost`.
 5. Legg inn `TEBEX_STORE_URL`, `TEBEX_WEBHOOK_SECRET` og `SHOP_CONTACT_EMAIL` i Netlify og deploy på nytt.
 6. Sett Tebex til å logge inn kjøpere med Discord hvis du kan. Da finner nettsiden kjøperen direkte. Ellers brukes den som holdt bedriften av på nettsiden.
 
 **Slik fungerer et kjøp:**
 
-- Spilleren må være logget inn og whitelistet. Hen godtar vilkårene, og bedriften holdes av i 20 minutter mens hen betaler hos Tebex.
+- Spilleren må være logget inn og whitelistet. Hen velger type og sted, godtar vilkårene, og stedet holdes av i 20 minutter mens hen betaler hos Tebex.
 - Når Tebex sier at betalingen er fullført, blir bedriften spillerens. Den vises under **Mine bedrifter**, og staff får varsel i Discord-webhooken.
 - Blir kjøpet refundert eller tapt i en tvist, blir bedriften ledig igjen.
 - Staff med rettigheten **Butikk og salg** ser alle kjøp under **Staff → Salg**. Der kan de også frigi en bedrift eller gi den til noen.

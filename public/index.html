@@ -421,7 +421,7 @@ td small{display:block;color:var(--muted)}
 .scard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .scard .mark{transform:none;width:52px;height:52px;font-size:24px}
 .scard.solgt .mark{background:var(--muted)}
-.scard h3{font-size:30px;overflow-wrap:anywhere}
+.scard h3{font-size:30px;hyphens:manual}
 .scard .area{color:var(--muted);font-size:14px}
 .scard ul{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:14px;color:var(--ink2)}
 .scard li{display:flex;gap:9px;align-items:baseline}
@@ -432,6 +432,19 @@ td small{display:block;color:var(--muted)}
 .pill.reservert{background:var(--warnsoft);color:var(--warn)}
 .pill.solgt{background:var(--paper2);color:var(--muted)}
 .pill.din{background:var(--ok);color:#fff}
+.sgrid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.picker{display:grid;gap:4px}
+.places{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:22px}
+.place{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:start;text-align:left;background:#fff;border:1.5px solid var(--line2);border-radius:6px;padding:16px;cursor:pointer;font:inherit;color:inherit}
+.place:hover:not([disabled]){border-color:var(--ink)}
+.place.on{border-color:var(--red);box-shadow:0 0 0 3px var(--redsoft)}
+.place[disabled]{cursor:not-allowed;background:var(--paper2);opacity:.75}
+.place .pin{width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--red);margin-top:6px}
+.place[disabled] .pin{background:var(--muted)}
+.place .pt{display:grid;gap:2px;min-width:0}
+.place .pt b{font-family:var(--display);font-size:26px;font-weight:800;text-transform:uppercase;line-height:1}
+.place .pt small{color:var(--muted);font-size:14px}
+.place .pill{grid-column:2;justify-self:start}
 .checkout{border:2px solid var(--ink);border-radius:6px;background:#fff;padding:24px;display:grid;gap:16px;margin-top:22px}
 .checkout .terms{display:grid;gap:8px;margin:0;padding-left:20px;color:var(--ink2);font-size:15px}
 .checkout label.ok{display:flex;gap:10px;align-items:flex-start;font-weight:600;cursor:pointer}

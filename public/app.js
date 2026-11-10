@@ -490,7 +490,7 @@ const STATUS={utkast:'Utkast',sendt:'Til behandling',godkjent:'Godkjent',avslatt
 const TSTATUS={apen:'Venter på staff',besvart:'Besvart',lukket:'Lukket'};
 const CFG={connect:'play.novexrp.no',invite:'',trailer:'',loginEnabled:true};
 const ST={ready:false,user:null,apps:[],tickets:[]};
-const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apen',tSort:'nyeste',tQ:'',myT:'alle',mySort:'nyeste',myQ:'',shop:null,shopLoading:false,shopType:'alle',buy:null,sales:null,salesLoading:false,team:null,teamLoading:false,tEdit:null,tFound:null};
+const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apen',tSort:'nyeste',tQ:'',myT:'alle',mySort:'nyeste',myQ:'',shop:null,shopLoading:false,shopPick:'',buy:null,sales:null,salesLoading:false,team:null,teamLoading:false,tEdit:null,tFound:null};
 const tno=id=>1000+Number(id);
 const app=$('#app');
 const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff','team','arkiv','salg'];
@@ -885,47 +885,51 @@ function myBizCard(){
   const o=V.shop&&V.shop.owned;if(!o||!o.length)return '';
   return `<div class="card" style="display:grid;gap:12px"><h3>Mine bedrifter</h3>${o.map(b=>`<div class="row"><div class="mark" style="width:42px;height:42px;font-size:18px;transform:none">${SHOPDEF.TYPES[b.type].mark}</div><div><b>${esc(b.name)}</b><br><small class="muted">${SHOPDEF.TYPES[b.type].label} · eid siden ${fdate(b.since)}</small></div></div>`).join('')}<p class="muted" style="font-size:14px">Bedriften er aktiv i spillet neste gang du kobler til. Trenger du hjelp, lager du en ticket.</p></div>`;
 }
-function shopCard(l){
-  const T=SHOPDEF.TYPES[l.type],mine=l.mine&&l.status==='solgt',held=l.mine&&l.status==='reservert';
-  const pill=mine?'<span class="pill din">Din</span>':held?'<span class="pill reservert">Holdt av til deg</span>':`<span class="pill ${l.status}">${SLABEL[l.status]}</span>`;
-  let btn;
-  if(mine)btn='<a class="btn sm" href="#panel">Se i panelet</a>';
-  else if(l.status==='solgt')btn='<button class="btn sm" disabled>Solgt</button>';
-  else if(l.status==='reservert'&&!held)btn='<button class="btn sm" disabled>Noen holder på å kjøpe</button>';
-  else if(!V.shop.open||!l.ready)btn='<button class="btn sm" disabled>Åpner snart</button>';
-  else btn=`<button class="btn red sm" data-buy="${l.id}">${held?'Fullfør kjøpet':'Kjøp bedriften'}</button>`;
-  return `<div class="scard ${l.status} ${mine?'mine':''}"><div class="top"><div class="mark">${T.mark}</div>${pill}</div>
-    <div><h3>${esc(l.name)}</h3><span class="area">${T.label} · ${esc(l.area)}</span></div>
+const placesOf=t=>V.shop.listings.filter(l=>l.type===t);
+function typeCard(t){
+  const T=SHOPDEF.TYPES[t],ls=placesOf(t),free=ls.filter(l=>l.status==='ledig'),mine=ls.find(l=>l.mine&&l.status==='solgt');
+  const ready=V.shop.open&&ls.some(l=>l.ready);
+  const btn=mine?'<a class="btn sm" href="#panel">Se i panelet</a>':!free.length?'<button class="btn sm" disabled>Utsolgt</button>':!ready?`<button class="btn sm" data-pickt="${t}">Se steder</button>`:`<button class="btn red sm" data-pickt="${t}">Velg sted</button>`;
+  return `<div class="scard ${!free.length&&!mine?'solgt':''} ${mine?'mine':''}"><div class="top"><div class="mark">${T.mark}</div>${mine?'<span class="pill din">Du eier en</span>':`<span class="pill ${free.length?'ledig':'solgt'}">${free.length} av ${ls.length} ledige</span>`}</div>
+    <div><h3>${esc(T.label).replace(/^(Bensin)(stasjon)/,'$1&shy;$2')}</h3><span class="area">${ls.map(l=>esc(l.area)).join(' · ')}</span></div>
     <p class="muted" style="font-size:15px">${esc(T.desc)}</p>
     <ul>${T.includes.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>
-    <div class="spread" style="margin-top:4px"><span class="price">${kr(l.price)}</span>${btn}</div></div>`;
+    <div class="spread" style="margin-top:4px"><span class="price">${kr(T.price)}</span>${btn}</div></div>`;
+}
+function placePicker(t){
+  const T=SHOPDEF.TYPES[t],ls=placesOf(t),B=V.buy&&ls.find(l=>l.id===V.buy);
+  const can=ST.user&&ST.user.whitelisted&&V.shop.owned.length<V.shop.maxPerPlayer&&V.shop.open;
+  const tile=l=>{
+    const held=l.mine&&l.status==='reservert',taken=l.status==='solgt'||(l.status==='reservert'&&!held);
+    const lab=l.mine&&l.status==='solgt'?'<span class="pill din">Din</span>':held?'<span class="pill reservert">Holdt av til deg</span>':l.status==='solgt'?'<span class="pill solgt">Solgt</span>':l.status==='reservert'?'<span class="pill reservert">Noen kjøper nå</span>':'<span class="pill ledig">Ledig</span>';
+    return `<button class="place ${V.buy===l.id?'on':''}" data-place="${l.id}" ${taken||!l.ready?'disabled':''} aria-pressed="${V.buy===l.id}"><span class="pin"></span><span class="pt"><b>${esc(l.area)}</b><small>${esc(l.note||'')}</small></span>${l.ready||taken?lab:'<span class="pill">Åpner snart</span>'}</button>`;
+  };
+  return `<div class="picker" id="picker">
+    <button class="back" data-pickt="">Alle bedrifter</button>
+    <div class="spread" style="margin-top:12px"><div class="row"><div class="mark" style="transform:none">${T.mark}</div><div><h2 style="font-size:44px">${esc(T.label)}</h2><span class="muted">Velg hvor du vil ha ${T.label.toLowerCase()}en din</span></div></div><span class="price">${kr(T.price)}</span></div>
+    <div class="places">${ls.map(tile).join('')}</div>
+    ${B?`<div class="checkout" id="checkout">
+      <div><span class="eyebrow" style="margin-bottom:6px">Du har valgt</span><h3 style="font-size:32px">${esc(B.name)}</h3><span class="muted">${esc(B.note||'')}</span></div>
+      <div><b>Vilkår</b><ol class="terms">${SHOPDEF.TERMS.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div>
+      <label class="ok"><input type="checkbox" id="buyTerms"> Jeg har lest vilkårene og forstår at kjøpet gjelder en bedrift i spillet.</label>
+      <p class="muted" style="font-size:14px">Du sendes videre til Tebex for å betale ${B.price} kr. ${esc(B.area)} holdes av til deg i ${SHOPDEF.RESERVE_MINUTES} minutter. Logg inn på Tebex med samme Discord-konto som her.</p>
+      <span id="buyErr" hidden style="color:var(--bad);font-weight:600"></span>
+      <div class="row"><button class="btn red" id="buyGo" ${can?'':'disabled'}>Gå til betaling</button><button class="btn ghost" id="buyCancel">Velg et annet sted</button></div>
+    </div>`:`<p class="muted" style="margin-top:16px">Trykk på et ledig sted for å velge det.</p>`}
+  </div>`;
 }
 function vShop(){
-  const head=phead('Butikk','Kjøp din egen bedrift i Novex. Bensinstasjoner, dagligvare, kafeer og mekanikere. Hver bedrift finnes bare én gang, og når den er solgt, er den borte.','Bedrifter til salgs');
+  const head=phead('Butikk','Kjøp din egen bedrift i Novex. Velg type, og velg selv hvor i byen du vil ha den. Hvert sted kan bare eies av én.','Bedrifter til salgs');
   if(!V.shop)return head+`<div class="wrap page">${loading('Henter butikken …')}</div>`;
-  const S=V.shop,types=['alle',...Object.keys(SHOPDEF.TYPES)];
-  const list=S.listings.filter(l=>V.shopType==='alle'||l.type===V.shopType);
-  const held=S.listings.find(l=>l.mine&&l.status==='reservert');
-  const B=V.buy&&S.listings.find(l=>l.id===V.buy);
+  const S=V.shop,held=S.listings.find(l=>l.mine&&l.status==='reservert');
   let notice='';
-  if(!S.open)notice=`<div class="notice"><span><b>Butikken åpner snart.</b> Du kan se hvilke bedrifter som kommer, men kjøp er ikke åpnet ennå.</span></div>`;
+  if(!S.open)notice=`<div class="notice"><span><b>Butikken åpner snart.</b> Du kan se bedriftene og stedene, men kjøp er ikke åpnet ennå.</span></div>`;
   else if(!ST.user)notice=`<div class="notice"><span>Logg inn med Discord for å kjøpe. Bedriften knyttes til Discord-kontoen din.</span><a class="btn sm discord" href="/auth/discord">Logg inn med Discord</a></div>`;
   else if(!ST.user.whitelisted)notice=`<div class="notice"><span>Du må være whitelistet før du kan kjøpe en bedrift.</span><a class="btn sm" href="#whitelist">Søk whitelist</a></div>`;
   else if(S.owned.length>=S.maxPerPlayer)notice=`<div class="notice"><span>Du eier allerede ${S.owned.length===1?'en bedrift':S.owned.length+' bedrifter'}. Hver spiller kan eie ${S.maxPerPlayer===1?'én':S.maxPerPlayer}.</span><a class="btn sm" href="#panel">Se mine bedrifter</a></div>`;
-  if(held&&!B)notice+=`<div class="notice" style="margin-top:12px"><span><b>${esc(held.name)}</b> er holdt av til deg til kl. ${fclock(held.reservedUntil)}. Har du betalt, vises bedriften som din når Tebex har bekreftet betalingen, som regel innen et minutt.</span><div class="row"><button class="btn sm" id="shopReload">Sjekk status</button><button class="btn sm ghost" data-unbuy="${held.id}">Avbryt</button></div></div>`;
-  const checkout=B?`<div class="checkout" id="checkout">
-    <div class="spread"><div><span class="eyebrow" style="margin-bottom:6px">Kjøp</span><h3 style="font-size:36px">${esc(B.name)}</h3><span class="muted">${SHOPDEF.TYPES[B.type].label} · ${esc(B.area)}</span></div><span class="price">${kr(B.price)}</span></div>
-    <div><b>Vilkår</b><ol class="terms">${SHOPDEF.TERMS.map(t=>`<li>${esc(t)}</li>`).join('')}</ol></div>
-    <label class="ok"><input type="checkbox" id="buyTerms"> Jeg har lest vilkårene og forstår at kjøpet gjelder en bedrift i spillet.</label>
-    <p class="muted" style="font-size:14px">Du sendes videre til Tebex for å betale. Bedriften holdes av til deg i ${SHOPDEF.RESERVE_MINUTES} minutter. Logg inn på Tebex med samme Discord-konto som her.</p>
-    <span class="err" id="buyErr" hidden style="color:var(--bad);font-weight:600"></span>
-    <div class="row"><button class="btn red" id="buyGo">Gå til betaling</button><button class="btn ghost" id="buyCancel">Avbryt</button></div>
-  </div>`:'';
-  const free=S.listings.filter(l=>l.status==='ledig').length;
-  return head+`<div class="wrap page">
-    ${notice}${checkout}
-    <div class="spread" style="margin-top:${notice||checkout?'28px':'0'}"><div class="tabs shoptabs">${types.map(t=>`<button data-stype="${t}" class="${V.shopType===t?'on':''}">${t==='alle'?'Alle':SHOPDEF.TYPES[t].plural} <span class="mono">${t==='alle'?S.listings.length:S.listings.filter(l=>l.type===t).length}</span></button>`).join('')}</div><span class="muted">${free} av ${S.listings.length} ledige</span></div>
-    <div class="sgrid">${list.map(shopCard).join('')}</div>
+  if(held&&V.buy!==held.id)notice+=`<div class="notice" style="margin-top:12px"><span><b>${esc(held.name)}</b> er holdt av til deg til kl. ${fclock(held.reservedUntil)}. Har du betalt, blir bedriften din når Tebex har bekreftet betalingen, som regel innen et minutt.</span><div class="row"><button class="btn sm" id="shopReload">Sjekk status</button><button class="btn sm ghost" data-unbuy="${held.id}">Avbryt</button></div></div>`;
+  const body=V.shopPick&&SHOPDEF.TYPES[V.shopPick]?placePicker(V.shopPick):`<div class="sgrid">${Object.keys(SHOPDEF.TYPES).map(typeCard).join('')}</div>`;
+  return head+`<div class="wrap page">${notice}<div style="margin-top:${notice?'24px':'0'}">${body}</div>
     <div class="legal"><span>Betaling håndteres av Tebex. Kjøp gjelder bare innhold på Project Novex og gir ingen penger eller gjenstander utenfor spillet.</span><span>Project Novex er ikke godkjent, sponset eller støttet av Rockstar Games, Take-Two Interactive eller Cfx.re.</span>${S.email?`<span>Kontakt om kjøp: <a href="mailto:${esc(S.email)}">${esc(S.email)}</a></span>`:''}</div>
   </div>`;
 }
@@ -937,7 +941,7 @@ async function loadSales(){
   V.salesLoading=false;if(route==='salg')refresh(true);
 }
 const PSTATUS={betalt:'Betalt',refundert:'Refundert',tvist:'Tvist','tvist-tapt':'Tvist tapt'};
-const RESULT={tildelt:'Tildelt','konflikt':'Allerede eid, refunder','mangler-kjoper':'Fant ikke kjøperen'};
+const RESULT={tildelt:'Tildelt','konflikt':'Allerede eid, refunder','mangler-kjoper':'Fant ikke kjøperen, gi bort under Bedrifter','velg-sted':'Sted ikke valgt, gi et ledig sted under Bedrifter'};
 function pSales(){
   const S=V.sales;
   if(!S)return `<h1 class="ph">Salg</h1>`+loading('Henter salg …');
@@ -946,7 +950,7 @@ function pSales(){
   const setup=S.open&&linked===S.listings.length?'':`<div class="card" style="display:grid;gap:12px;margin-top:20px"><h3>Sett opp betaling</h3><ul class="setup">
     ${ok(!!S.store,'Tebex-butikk koblet til (<span class="mono">TEBEX_STORE_URL</span> i Netlify)')}
     ${ok(S.hasSecret,'Webhook-nøkkel lagt inn (<span class="mono">TEBEX_WEBHOOK_SECRET</span> i Netlify)')}
-    ${ok(linked===S.listings.length,`Tebex-pakke koblet til hver bedrift (${linked} av ${S.listings.length}, i <span class="mono">public/shop.js</span>)`)}
+    ${ok(linked===S.listings.length,`Tebex-pakke koblet til hver type (${linked} av ${S.listings.length} steder klare, i <span class="mono">public/shop.js</span>)`)}
     ${ok(!!S.email,'Kontakt-e-post vises i butikken (<span class="mono">SHOP_CONTACT_EMAIL</span>)')}
   </ul><p class="muted" style="font-size:14px">Butikken åpner for kjøp når de to første er på plass. Bedrifter uten Tebex-pakke vises som «Åpner snart».</p></div>`;
   const who=o=>o?`${esc(o.name)} <small class="mono muted">${esc(o.id)}</small>`:'–';
@@ -1006,8 +1010,8 @@ document.addEventListener('click',async e=>{
   if(d.tab){V.tab=d.tab;render(true);return}
   if(d.stab){V.staffTab=d.stab;V.staff=null;render(true);return}
   if(d.tf){TK[d.tm].f=d.tf;render(true);return}
-  if(d.stype){V.shopType=d.stype;render(true);return}
-  if(d.buy){if(!ST.user){location.href='/auth/discord';return}V.buy=d.buy;render(true);const c=$('#checkout');if(c)c.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
+  if(d.pickt!==undefined){V.shopPick=d.pickt;V.buy=null;render(true);const p=$(d.pickt?'#picker':'.sgrid');if(p)p.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
+  if(d.place){V.buy=d.place;render(true);const c=$('#checkout');if(c)c.scrollIntoView({block:'nearest',behavior:REDUCE?'auto':'smooth'});return}
   if(d.unbuy){try{await api('POST',`/api/shop/${d.unbuy}/cancel`,{});toast('Reservasjonen er avbrutt')}catch(x){errToast(x)}V.shop=null;render(true);return}
   if(d.free){if(el.dataset.sure!=='1'){el.dataset.sure='1';el.textContent='Trykk igjen for å frigi';setTimeout(()=>{if(el.isConnected){el.dataset.sure='';el.textContent='Frigi'}},4000);return}
     el.disabled=true;try{await api('POST','/api/staff/shop/'+d.free,{action:'frigi'});toast('Bedriften er ledig igjen');V.sales=null;V.shop=null;render(true)}catch(x){el.disabled=false;errToast(x)}return}

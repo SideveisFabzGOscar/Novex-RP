@@ -790,7 +790,7 @@ const ownedBy = (all, uid) => all.filter((x) => x.st.status === 'solgt' && x.st.
 function listingOut(C, def, st, user) {
   const mine = !!(user && (st.owner === user.id || st.reserved_by === user.id));
   return {
-    id: def.id, type: def.type, name: def.name, area: def.area, price: def.price, ready: !!def.tebex,
+    id: def.id, type: def.type, name: def.name, area: def.area, price: def.price, note: def.note, ready: !!SHOP.packageOf(def),
     status: st.status, mine, reservedUntil: st.status === 'reservert' && st.reserved_by === (user && user.id) ? st.reserved_until : null
   };
 }
@@ -806,7 +806,7 @@ route('POST', '/api/shop/:id/reserve', async ({ C, db, user, params, body }) => 
   if (!shopOpen(C)) fail(409, 'Butikken er ikke åpnet ennå.');
   const def = listingDef(params.id);
   if (!def) fail(404, 'Fant ikke bedriften.');
-  if (!def.tebex) fail(409, 'Denne bedriften er ikke koblet til betaling ennå.');
+  if (!SHOP.packageOf(def)) fail(409, 'Denne bedriften er ikke koblet til betaling ennå.');
   if (body.terms !== true) fail(400, 'Du må godta vilkårene før du kjøper.');
   if (!user.is_staff && !await hasWhitelist(db, user.id)) fail(409, 'Du må være whitelistet før du kan kjøpe en bedrift.');
   limit('reserve:' + user.id, 10, 10 * 60 * 1000);
@@ -819,7 +819,7 @@ route('POST', '/api/shop/:id/reserve', async ({ C, db, user, params, body }) => 
   for (const x of all) if (x.def.id !== def.id && x.st.status === 'reservert' && x.st.reserved_by === user.id) await DB.set(db, 'shop/' + x.def.id, { ...x.st, status: 'ledig', reserved_by: null, reserved_until: 0 });
   const until = Date.now() + SHOP.RESERVE_MINUTES * 60 * 1000;
   await DB.set(db, 'shop/' + def.id, { ...st, id: def.id, status: 'reservert', reserved_by: user.id, reserved_until: until });
-  return { checkout: `${C.tebexStore}/package/${encodeURIComponent(def.tebex)}`, reservedUntil: until };
+  return { checkout: `${C.tebexStore}/package/${encodeURIComponent(SHOP.packageOf(def))}`, reservedUntil: until };
 }, { auth: 'user' });
 route('POST', '/api/shop/:id/cancel', async ({ db, user, params }) => {
   const def = listingDef(params.id);
@@ -852,24 +852,31 @@ async function tebexWebhook(C, db, req) {
     if (await DB.get(db, 'purchases/' + txn)) return json(200, { ok: true, duplicate: true });
     const items = [];
     for (const prod of products) {
-      const def = SHOP.LISTINGS.find((l) => l.tebex && String(l.tebex) === String(prod.id));
-      if (!def) continue;
-      const st = await listingState(db, def.id);
+      /* pakken kan gjelde ett bestemt sted, eller en hel type der spilleren valgte sted på nettsiden */
+      const cands = SHOP.LISTINGS.filter((l) => SHOP.packageOf(l) && String(SHOP.packageOf(l)) === String(prod.id));
+      if (!cands.length) continue;
       const pid = String((prod.username && prod.username.id) || buyerId || '');
-      /* finn kjøperen: Discord-ID fra Tebex hvis den er registrert her, ellers den som holdt bedriften av */
-      let owner = null;
-      if (/^\d{15,21}$/.test(pid) && await DB.get(db, 'users/' + pid)) owner = pid;
-      else if (st.reserved_by) owner = st.reserved_by;
-      let result = 'tildelt';
-      if (st.status === 'solgt' && st.owner && st.owner !== owner) result = 'konflikt';
-      else if (!owner) result = 'mangler-kjoper';
-      if (result === 'tildelt') await DB.set(db, 'shop/' + def.id, { id: def.id, status: 'solgt', owner, sold_at: Date.now(), txn, reserved_by: null, reserved_until: 0 });
-      items.push({ listing: def.id, name: def.name, owner, tebex_user: pid, result });
+      const known = /^\d{15,21}$/.test(pid) && await DB.get(db, 'users/' + pid) ? pid : null;
+      const qty = Math.max(1, Math.min(5, Number(prod.quantity) || 1));
+      for (let n = 0; n < qty; n++) {
+        const raws = await Promise.all(cands.map(async (l) => ({ def: l, st: (await DB.get(db, 'shop/' + l.id)) || { id: l.id, status: 'ledig' } })));
+        const open = raws.filter((x) => x.st.status !== 'solgt');
+        /* finn stedet: det kjøperen holdt av. Er kjøperen ukjent, brukes den eneste som holder av et sted av denne typen. */
+        let pick = known ? open.find((x) => x.st.reserved_by === known) : null;
+        if (!pick && !known) { const held = open.filter((x) => x.st.reserved_by); if (held.length === 1) pick = held[0]; }
+        if (!pick && cands.length === 1) pick = raws[0];
+        const owner = known || (pick && pick.st.reserved_by) || null;
+        const T = SHOP.TYPES[cands[0].type];
+        if (!pick || !owner) { items.push({ listing: pick ? pick.def.id : null, type: cands[0].type, name: pick ? pick.def.name : T.label + ' (sted ikke valgt)', owner, tebex_user: pid, result: owner ? 'velg-sted' : 'mangler-kjoper' }); continue; }
+        if (pick.st.status === 'solgt' && pick.st.owner !== owner) { items.push({ listing: pick.def.id, type: pick.def.type, name: pick.def.name, owner, tebex_user: pid, result: 'konflikt' }); continue; }
+        await DB.set(db, 'shop/' + pick.def.id, { id: pick.def.id, status: 'solgt', owner, sold_at: Date.now(), txn, reserved_by: null, reserved_until: 0 });
+        items.push({ listing: pick.def.id, type: pick.def.type, name: pick.def.name, owner, tebex_user: pid, result: 'tildelt' });
+      }
     }
     const amount = p.price && p.price.amount != null ? `${p.price.amount} ${p.price.currency || ''}`.trim() : '';
     await DB.set(db, 'purchases/' + txn, { txn, at: Date.now(), status: 'betalt', amount, buyer_name: str(p.customer && p.customer.username && p.customer.username.username, 60), items });
     for (const it of items) {
-      const msg = it.result === 'tildelt' ? `**${it.name}** er solgt til <@${it.owner}> (${amount}).` : it.result === 'konflikt' ? `**${it.name}** ble betalt, men er allerede eid av noen andre. Refunder kjøpet i Tebex (${txn}).` : `**${it.name}** ble betalt, men kjøperen ble ikke funnet. Tildel bedriften under Salg på nettsiden (${txn}).`;
+      const msg = it.result === 'tildelt' ? `**${it.name}** er solgt til <@${it.owner}> (${amount}).` : it.result === 'konflikt' ? `**${it.name}** ble betalt, men er allerede eid av noen andre. Refunder kjøpet i Tebex (${txn}).` : it.result === 'velg-sted' ? `<@${it.owner}> betalte for **${it.name}**, men hadde ikke valgt sted. Gi hen et ledig sted under Salg på nettsiden (${txn}).` : `**${it.name}** ble betalt, men kjøperen ble ikke funnet. Tildel bedriften under Salg på nettsiden (${txn}).`;
       await notify(C, it.result === 'tildelt' ? 'Bedrift solgt' : 'Kjøp trenger oppfølging', msg, it.result === 'tildelt' ? 0x11804a : 0xa86a06);
     }
     return json(200, { ok: true });
@@ -881,7 +888,7 @@ async function tebexWebhook(C, db, req) {
     rec.status = ev.type === 'payment.refunded' ? 'refundert' : lost ? 'tvist-tapt' : 'tvist';
     rec.updated_at = Date.now();
     await DB.set(db, 'purchases/' + txn, rec);
-    if (lost) for (const it of rec.items || []) {
+    if (lost) for (const it of (rec.items || []).filter((i) => i.listing)) {
       const st = await listingState(db, it.listing);
       if (st.txn === txn) await DB.set(db, 'shop/' + it.listing, { id: it.listing, status: 'ledig', owner: null, txn: null, sold_at: 0, reserved_by: null, reserved_until: 0 });
     }
@@ -902,7 +909,7 @@ route('GET', '/api/staff/shop', async ({ C, db, user }) => {
   const who = (id) => id ? { id, name: people[id] ? people[id].name || people[id].username : 'Ukjent' } : null;
   return {
     open: shopOpen(C), store: C.tebexStore, hasSecret: !!C.tebexSecret, email: C.shopEmail,
-    listings: all.map((x) => ({ id: x.def.id, name: x.def.name, type: x.def.type, price: x.def.price, tebex: x.def.tebex, status: x.st.status, owner: who(x.st.owner), reservedBy: who(x.st.reserved_by), reservedUntil: x.st.reserved_until || null, soldAt: x.st.sold_at || null, txn: x.st.txn || null, manual: !!x.st.manual })),
+    listings: all.map((x) => ({ id: x.def.id, name: x.def.name, type: x.def.type, price: x.def.price, tebex: SHOP.packageOf(x.def), area: x.def.area, status: x.st.status, owner: who(x.st.owner), reservedBy: who(x.st.reserved_by), reservedUntil: x.st.reserved_until || null, soldAt: x.st.sold_at || null, txn: x.st.txn || null, manual: !!x.st.manual })),
     purchases: purchases.slice(0, 200).map((p) => ({ txn: p.txn, at: p.at, status: p.status, amount: p.amount, buyerName: p.buyer_name, items: (p.items || []).map((i) => ({ ...i, owner: who(i.owner) })) }))
   };
 }, { auth: 'staff' });
