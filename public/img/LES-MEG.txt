@@ -3,7 +3,7 @@ Finnes ikke filen, viser siden 3D-bildet i stedet.
 
 hero.jpg       Bakgrunn øverst på forsiden (erstatter 3D-byen). Bredt bilde, minst 1920 px.
 ran.jpg        Bilde 1: Gatelivet i full fart
-kontroll.jpg   Bilde 2: Førerkort og vognkort, er du grei
+politi.jpg     Bilde 2: Førerkort og vognkort, er du grei
 lab.jpg        Bilde 3: Ikke alt lages på et laboratorium
 byen.jpg       Bilde 4: Byen eies av spillerne
 
