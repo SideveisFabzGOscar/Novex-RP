@@ -475,7 +475,10 @@ function vRules(){
 function vBiz(){
   return phead('Bedrifter og etater','Alle bedrifter drives av spillere. Vil du jobbe et sted, søker du stilling. Vil du starte noe eget, sender du en bedriftssøknad.','Byen')+`
   <div class="wrap page"><div class="row"><a class="btn red" href="#stillinger">Se ledige stillinger</a><button class="btn" data-new="bedrift">Søk om egen bedrift</button></div>
-  <div class="bgrid">${BIZ.map(bizCard).join('')}</div></div>`;
+  <div class="bgrid">${BIZ.map(bizCard).join('')}</div>
+  <div class="ghead">Eie din egen bedrift</div>
+  <div class="spread" style="margin-top:14px"><p class="muted" style="max-width:62ch">Vil du eie en bedrift selv, kan du kjøpe en bensinstasjon, dagligvare, kafé eller mekaniker i butikken og velge hvor i byen den skal ligge.</p><a class="btn red" href="#butikk">Til butikken</a></div>
+  <div class="tgrid light" style="margin-top:20px">${shopTeaser()}</div></div>`;
 }
 
 
@@ -517,6 +520,7 @@ async function loadMe(){
     if(ST.user)await Promise.all([loadApps(),loadTickets(),loadOv()]);
   }catch(e){ST.loadError=e.error;setupHeroVideo()}
   ST.ready=true;refresh(true);
+  loadShop();
 }
 async function loadOv(){if(ST.user&&ST.user.isStaff){try{V.ov=await api('GET','/api/staff/overview')}catch(e){}}}
 async function loadApps(){ST.apps=(await api('GET','/api/apps')).apps}
@@ -551,7 +555,7 @@ function replaceApp(a){const i=ST.apps.findIndex(x=>x.id===a.id);if(i>=0)ST.apps
    ROUTER
    ========================================================= */
 function typing(){const a=document.activeElement;return a&&app.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)}
-function refresh(force){updateNav();if(!PANEL.includes(route)&&route!=='butikk')return;if(!force&&typing())return;render(true)}
+function refresh(force){updateNav();if(!PANEL.includes(route)&&route!=='butikk'&&route!=='bedrifter')return;if(!force&&typing())return;render(true)}
 function updateNav(){
   $('#panelBtn').textContent=ST.user?ST.user.name:'Logg inn';
   /* Spillerpanel for alle innloggede, og én Staff-meny med alle staff-sidene */
@@ -879,8 +883,17 @@ const SLABEL={ledig:'Ledig',reservert:'Reservert',solgt:'Solgt'};
 async function loadShop(){
   if(V.shopLoading)return;V.shopLoading=true;
   try{V.shop=await api('GET','/api/shop')}catch(e){V.shop={open:false,listings:[],owned:[],error:e.error}}
-  V.shopLoading=false;if(route==='butikk'||route==='panel')refresh(true);
+  V.shopLoading=false;drawShopHome();if(route==='butikk'||route==='panel'||route==='bedrifter')refresh(true);
 }
+/* små kort for forsiden og Bedrifter: én per type, med hvor mange steder som er ledige */
+function shopTeaser(){
+  return Object.keys(SHOPDEF.TYPES).map(t=>{
+    const T=SHOPDEF.TYPES[t],ls=V.shop?V.shop.listings.filter(l=>l.type===t):SHOPDEF.LISTINGS.filter(l=>l.type===t);
+    const free=V.shop?ls.filter(l=>l.status==='ledig').length:null;
+    return `<a class="tcard" href="#butikk" data-pickt="${t}"><div class="mark">${T.mark}</div><h3>${esc(T.label).replace(/^(Bensin)(stasjon)/,'$1&shy;$2')}</h3><span class="areas">${ls.map(l=>esc(l.area)).join(' · ')}</span><div class="foot"><span class="price">${kr(T.price)}</span>${free===null?'':`<span class="left ${free?'':'none'}">${free?`${free} av ${ls.length} ledige`:'Utsolgt'}</span>`}</div></a>`;
+  }).join('');
+}
+function drawShopHome(){const el=$('#shopHome');if(el)el.innerHTML=shopTeaser()}
 function myBizCard(){
   const o=V.shop&&V.shop.owned;if(!o||!o.length)return '';
   return `<div class="card" style="display:grid;gap:12px"><h3>Mine bedrifter</h3>${o.map(b=>`<div class="row"><div class="mark" style="width:42px;height:42px;font-size:18px;transform:none">${SHOPDEF.TYPES[b.type].mark}</div><div><b>${esc(b.name)}</b><br><small class="muted">${SHOPDEF.TYPES[b.type].label} · eid siden ${fdate(b.since)}</small></div></div>`).join('')}<p class="muted" style="font-size:14px">Bedriften er aktiv i spillet neste gang du kobler til. Trenger du hjelp, lager du en ticket.</p></div>`;
@@ -1010,7 +1023,7 @@ document.addEventListener('click',async e=>{
   if(d.tab){V.tab=d.tab;render(true);return}
   if(d.stab){V.staffTab=d.stab;V.staff=null;render(true);return}
   if(d.tf){TK[d.tm].f=d.tf;render(true);return}
-  if(d.pickt!==undefined){V.shopPick=d.pickt;V.buy=null;render(true);const p=$(d.pickt?'#picker':'.sgrid');if(p)p.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
+  if(d.pickt!==undefined){e.preventDefault();V.shopPick=d.pickt;V.buy=null;if(route!=='butikk'){location.hash='butikk';return}render(true);const p=$(d.pickt?'#picker':'.sgrid');if(p)p.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
   if(d.place){V.buy=d.place;render(true);const c=$('#checkout');if(c)c.scrollIntoView({block:'nearest',behavior:REDUCE?'auto':'smooth'});return}
   if(d.unbuy){try{await api('POST',`/api/shop/${d.unbuy}/cancel`,{});toast('Reservasjonen er avbrutt')}catch(x){errToast(x)}V.shop=null;render(true);return}
   if(d.free){if(el.dataset.sure!=='1'){el.dataset.sure='1';el.textContent='Trykk igjen for å frigi';setTimeout(()=>{if(el.isConnected){el.dataset.sure='';el.textContent='Frigi'}},4000);return}
@@ -1284,6 +1297,7 @@ function idUseInWhitelist(txt){
    BOOT
    ========================================================= */
 $('#bizHome').innerHTML=BIZ.slice(0,4).map(bizCard).join('');
+drawShopHome();
 renderClips();bindCineVideo();idInit();
 /* videoene spilles bare når de vises, så de ikke bruker maskinkraft ellers */
 (function(){

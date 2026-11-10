@@ -460,6 +460,27 @@ td small{display:block;color:var(--muted)}
 .assign{display:flex;gap:6px;flex-wrap:wrap}
 .assign input{width:190px;padding:7px 10px;font-size:14px}
 
+/* butikk på forsiden og under Bedrifter */
+.tgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:40px}
+@media (max-width:1000px){.tgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:540px){.tgrid{grid-template-columns:1fr}}
+.tcard{display:grid;gap:10px;align-content:start;border:1px solid var(--nline);background:var(--night2);border-radius:6px;padding:20px;color:#fff;text-decoration:none;transition:border-color .2s,transform .2s}
+.tcard:hover{border-color:var(--red);transform:translateY(-3px)}
+.tcard .mark{transform:none;width:46px;height:46px;font-size:21px;background:var(--red)}
+.tcard h3{font-size:30px;hyphens:manual}
+.tcard .areas{color:var(--nmuted);font-size:14px}
+.tcard .foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px;padding-top:12px;border-top:1px solid var(--nline)}
+.tcard .price{font-size:32px;color:#fff}
+.tcard .price small{color:var(--nmuted)}
+.tcard .left{font-size:13px;font-weight:700;color:#8fe0b0}
+.tcard .left.none{color:var(--nmuted)}
+.light .tcard{background:#fff;color:var(--ink);border-color:var(--ink)}
+.light .tcard .areas,.light .tcard .price small{color:var(--muted)}
+.light .tcard .price{color:var(--ink)}
+.light .tcard .foot{border-top-color:var(--line)}
+.light .tcard .left{color:var(--ok)}
+.light .tcard:hover{box-shadow:8px 8px 0 var(--red);transform:none}
+
 /* ticket-lister */
 .ttools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .ttools input{flex:1 1 260px;max-width:440px}
@@ -708,6 +729,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink);box
     <div class="wrap">
       <div class="spread"><div><div class="eyebrow">Bedrifter og etater</div><h2 class="h2">Finn din plass</h2></div><a class="btn" href="#bedrifter">Se alle</a></div>
       <div class="bgrid" id="bizHome"></div>
+    </div>
+  </section>
+
+  <section class="band dark" id="eie">
+    <div class="wrap">
+      <div class="spread"><div><div class="eyebrow">Butikk</div><h2 class="h2">Eie din egen bedrift</h2><p class="sub">Kjøp en bensinstasjon, dagligvare, kafé eller mekaniker, og velg selv hvor i byen den skal ligge. Hvert sted kan bare eies av én.</p></div><a class="btn line-w" href="#butikk">Til butikken</a></div>
+      <div class="tgrid" id="shopHome"></div>
     </div>
   </section>
 
