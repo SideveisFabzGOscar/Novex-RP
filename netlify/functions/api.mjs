@@ -10,8 +10,10 @@
  */
 import crypto from 'node:crypto';
 import formsModule from '../../public/forms.js';
+import shopModule from '../../public/shop.js';
 
 const { FORMS, JOBS, CATS, validate, PERMS, PERM_KEYS, appPerm } = formsModule;
+const SHOP = shopModule;
 
 /* ------------------------------------------------------------------ */
 /* Konfigurasjon                                                       */
@@ -41,7 +43,10 @@ function loadConfig() {
     invite: env.DISCORD_INVITE || '',
     trailer: env.YOUTUBE_TRAILER_ID || '',
     heroYoutube: env.HERO_YOUTUBE_ID ?? 'Yaba1xgSJ2k',
-    heroCredit: env.HERO_CREDIT || ''
+    heroCredit: env.HERO_CREDIT || '',
+    tebexStore: (env.TEBEX_STORE_URL || '').replace(/\/+$/, ''),
+    tebexSecret: env.TEBEX_WEBHOOK_SECRET || '',
+    shopEmail: env.SHOP_CONTACT_EMAIL || ''
   };
 }
 
@@ -521,7 +526,7 @@ route('POST', '/auth/logout', async ({ C, db, req }) => {
 });
 
 /* ---- offentlig ---- */
-route('GET', '/api/config', ({ C }) => ({ connect: C.connect, invite: C.invite, trailer: C.trailer, heroYoutube: C.heroYoutube, heroCredit: C.heroCredit, loginEnabled: !!(C.clientId && C.clientSecret), discordTickets: botOn(C) && !!C.publicKey }));
+route('GET', '/api/config', ({ C }) => ({ connect: C.connect, invite: C.invite, trailer: C.trailer, heroYoutube: C.heroYoutube, heroCredit: C.heroCredit, loginEnabled: !!(C.clientId && C.clientSecret), discordTickets: botOn(C) && !!C.publicKey, shopOpen: shopOpen(C), shopEmail: C.shopEmail }));
 route('GET', '/api/me', async ({ db, user }) => ({ user: user ? await publicUser(db, user) : null }), { auth: 'optional' });
 route('GET', '/api/status', ({ C }) => serverStatus(C));
 
@@ -768,6 +773,166 @@ route('DELETE', '/api/staff/team/:id', async ({ C, db, user, params }) => {
   await notify(C, 'Staff fjernet', `**${user.name || user.username}** fjernet **${old.name || id}** fra staff.`, 0x2b2425);
   return { ok: true };
 }, { auth: 'staff' });
+
+/* ---- butikk (bedrifter som selges via Tebex) ---- */
+const shopOpen = (C) => !!(C.tebexStore && C.tebexSecret);
+const listingDef = (id) => SHOP.LISTINGS.find((l) => l.id === id);
+async function listingState(db, id) {
+  const st = (await DB.get(db, 'shop/' + id)) || { id, status: 'ledig' };
+  if (st.status === 'reservert' && st.reserved_until < Date.now()) { st.status = 'ledig'; st.reserved_by = null; }
+  return st;
+}
+async function allListings(db) {
+  const states = await Promise.all(SHOP.LISTINGS.map((l) => listingState(db, l.id)));
+  return SHOP.LISTINGS.map((l, i) => ({ def: l, st: states[i] }));
+}
+const ownedBy = (all, uid) => all.filter((x) => x.st.status === 'solgt' && x.st.owner === uid);
+function listingOut(C, def, st, user) {
+  const mine = !!(user && (st.owner === user.id || st.reserved_by === user.id));
+  return {
+    id: def.id, type: def.type, name: def.name, area: def.area, price: def.price, ready: !!def.tebex,
+    status: st.status, mine, reservedUntil: st.status === 'reservert' && st.reserved_by === (user && user.id) ? st.reserved_until : null
+  };
+}
+route('GET', '/api/shop', async ({ C, db, user }) => {
+  const all = await allListings(db);
+  return {
+    open: shopOpen(C), email: C.shopEmail, maxPerPlayer: SHOP.MAX_PER_PLAYER,
+    listings: all.map((x) => listingOut(C, x.def, x.st, user)),
+    owned: user ? ownedBy(all, user.id).map((x) => ({ id: x.def.id, name: x.def.name, type: x.def.type, since: x.st.sold_at })) : []
+  };
+}, { auth: 'optional' });
+route('POST', '/api/shop/:id/reserve', async ({ C, db, user, params, body }) => {
+  if (!shopOpen(C)) fail(409, 'Butikken er ikke åpnet ennå.');
+  const def = listingDef(params.id);
+  if (!def) fail(404, 'Fant ikke bedriften.');
+  if (!def.tebex) fail(409, 'Denne bedriften er ikke koblet til betaling ennå.');
+  if (body.terms !== true) fail(400, 'Du må godta vilkårene før du kjøper.');
+  if (!user.is_staff && !await hasWhitelist(db, user.id)) fail(409, 'Du må være whitelistet før du kan kjøpe en bedrift.');
+  limit('reserve:' + user.id, 10, 10 * 60 * 1000);
+  const all = await allListings(db);
+  if (ownedBy(all, user.id).length >= SHOP.MAX_PER_PLAYER) fail(409, SHOP.MAX_PER_PLAYER === 1 ? 'Du eier allerede en bedrift. Hver spiller kan eie én.' : `Du kan eie maks ${SHOP.MAX_PER_PLAYER} bedrifter.`);
+  const st = all.find((x) => x.def.id === def.id).st;
+  if (st.status === 'solgt') fail(409, 'Bedriften er allerede solgt.');
+  if (st.status === 'reservert' && st.reserved_by !== user.id) fail(409, 'Noen andre holder på å kjøpe denne bedriften. Prøv igjen om litt.');
+  /* bare én reservasjon om gangen per spiller */
+  for (const x of all) if (x.def.id !== def.id && x.st.status === 'reservert' && x.st.reserved_by === user.id) await DB.set(db, 'shop/' + x.def.id, { ...x.st, status: 'ledig', reserved_by: null, reserved_until: 0 });
+  const until = Date.now() + SHOP.RESERVE_MINUTES * 60 * 1000;
+  await DB.set(db, 'shop/' + def.id, { ...st, id: def.id, status: 'reservert', reserved_by: user.id, reserved_until: until });
+  return { checkout: `${C.tebexStore}/package/${encodeURIComponent(def.tebex)}`, reservedUntil: until };
+}, { auth: 'user' });
+route('POST', '/api/shop/:id/cancel', async ({ db, user, params }) => {
+  const def = listingDef(params.id);
+  if (!def) fail(404, 'Fant ikke bedriften.');
+  const st = await listingState(db, def.id);
+  if (st.status === 'reservert' && st.reserved_by === user.id) await DB.set(db, 'shop/' + def.id, { ...st, status: 'ledig', reserved_by: null, reserved_until: 0 });
+  return { ok: true };
+}, { auth: 'user' });
+
+/* Tebex sender beskjed hit når noen har betalt, fått pengene tilbake eller startet en tvist.
+   Signaturen sjekkes med TEBEX_WEBHOOK_SECRET, så ingen andre kan late som de er Tebex. */
+function verifyTebex(C, raw, sig) {
+  if (!C.tebexSecret || !sig) return false;
+  const digest = crypto.createHash('sha256').update(raw).digest('hex');
+  const mac = crypto.createHmac('sha256', C.tebexSecret).update(digest).digest('hex');
+  return safeEq(String(sig).toLowerCase(), mac);
+}
+async function tebexWebhook(C, db, req) {
+  const raw = await req.text();
+  if (!verifyTebex(C, raw, req.headers.get('x-signature'))) return json(401, { error: 'Ugyldig signatur.' });
+  let ev; try { ev = JSON.parse(raw); } catch { return json(400, { error: 'Ugyldig JSON.' }); }
+  if (ev.type === 'validation.webhook') return json(200, { id: ev.id });
+  const p = ev.subject || {};
+  const txn = str(p.transaction_id, 80);
+  if (!txn) return json(200, { ok: true });
+  const products = Array.isArray(p.products) ? p.products : [];
+  const buyerId = String((p.customer && p.customer.username && p.customer.username.id) || '');
+
+  if (ev.type === 'payment.completed') {
+    if (await DB.get(db, 'purchases/' + txn)) return json(200, { ok: true, duplicate: true });
+    const items = [];
+    for (const prod of products) {
+      const def = SHOP.LISTINGS.find((l) => l.tebex && String(l.tebex) === String(prod.id));
+      if (!def) continue;
+      const st = await listingState(db, def.id);
+      const pid = String((prod.username && prod.username.id) || buyerId || '');
+      /* finn kjøperen: Discord-ID fra Tebex hvis den er registrert her, ellers den som holdt bedriften av */
+      let owner = null;
+      if (/^\d{15,21}$/.test(pid) && await DB.get(db, 'users/' + pid)) owner = pid;
+      else if (st.reserved_by) owner = st.reserved_by;
+      let result = 'tildelt';
+      if (st.status === 'solgt' && st.owner && st.owner !== owner) result = 'konflikt';
+      else if (!owner) result = 'mangler-kjoper';
+      if (result === 'tildelt') await DB.set(db, 'shop/' + def.id, { id: def.id, status: 'solgt', owner, sold_at: Date.now(), txn, reserved_by: null, reserved_until: 0 });
+      items.push({ listing: def.id, name: def.name, owner, tebex_user: pid, result });
+    }
+    const amount = p.price && p.price.amount != null ? `${p.price.amount} ${p.price.currency || ''}`.trim() : '';
+    await DB.set(db, 'purchases/' + txn, { txn, at: Date.now(), status: 'betalt', amount, buyer_name: str(p.customer && p.customer.username && p.customer.username.username, 60), items });
+    for (const it of items) {
+      const msg = it.result === 'tildelt' ? `**${it.name}** er solgt til <@${it.owner}> (${amount}).` : it.result === 'konflikt' ? `**${it.name}** ble betalt, men er allerede eid av noen andre. Refunder kjøpet i Tebex (${txn}).` : `**${it.name}** ble betalt, men kjøperen ble ikke funnet. Tildel bedriften under Salg på nettsiden (${txn}).`;
+      await notify(C, it.result === 'tildelt' ? 'Bedrift solgt' : 'Kjøp trenger oppfølging', msg, it.result === 'tildelt' ? 0x11804a : 0xa86a06);
+    }
+    return json(200, { ok: true });
+  }
+  if (ev.type === 'payment.refunded' || ev.type === 'payment.dispute.lost' || ev.type === 'payment.dispute.opened') {
+    const rec = await DB.get(db, 'purchases/' + txn);
+    if (!rec) return json(200, { ok: true });
+    const lost = ev.type !== 'payment.dispute.opened';
+    rec.status = ev.type === 'payment.refunded' ? 'refundert' : lost ? 'tvist-tapt' : 'tvist';
+    rec.updated_at = Date.now();
+    await DB.set(db, 'purchases/' + txn, rec);
+    if (lost) for (const it of rec.items || []) {
+      const st = await listingState(db, it.listing);
+      if (st.txn === txn) await DB.set(db, 'shop/' + it.listing, { id: it.listing, status: 'ledig', owner: null, txn: null, sold_at: 0, reserved_by: null, reserved_until: 0 });
+    }
+    await notify(C, lost ? 'Bedrift tatt tilbake' : 'Tvist på kjøp', `${(rec.items || []).map((i) => i.name).join(', ')}: ${rec.status} (${txn}).`, 0xc41b1b);
+    return json(200, { ok: true });
+  }
+  return json(200, { ok: true, ignored: ev.type });
+}
+route('POST', '/api/tebex/webhook', ({ C, db, req }) => tebexWebhook(C, db, req), { raw: true });
+
+/* staff: salg */
+route('GET', '/api/staff/shop', async ({ C, db, user }) => {
+  need(user, 'shop.manage', 'Du har ikke rettighet til butikken.');
+  const [all, purchases] = await Promise.all([allListings(db), DB.all(db, 'purchases/')]);
+  purchases.sort((a, b) => b.at - a.at);
+  const ids = [...new Set([...all.flatMap((x) => [x.st.owner, x.st.reserved_by]), ...purchases.flatMap((p) => (p.items || []).map((i) => i.owner))].filter(Boolean))];
+  const people = await peopleOf(db, ids);
+  const who = (id) => id ? { id, name: people[id] ? people[id].name || people[id].username : 'Ukjent' } : null;
+  return {
+    open: shopOpen(C), store: C.tebexStore, hasSecret: !!C.tebexSecret, email: C.shopEmail,
+    listings: all.map((x) => ({ id: x.def.id, name: x.def.name, type: x.def.type, price: x.def.price, tebex: x.def.tebex, status: x.st.status, owner: who(x.st.owner), reservedBy: who(x.st.reserved_by), reservedUntil: x.st.reserved_until || null, soldAt: x.st.sold_at || null, txn: x.st.txn || null, manual: !!x.st.manual })),
+    purchases: purchases.slice(0, 200).map((p) => ({ txn: p.txn, at: p.at, status: p.status, amount: p.amount, buyerName: p.buyer_name, items: (p.items || []).map((i) => ({ ...i, owner: who(i.owner) })) }))
+  };
+}, { auth: 'staff' });
+route('POST', '/api/staff/shop/:id', async ({ C, db, user, params, body }) => {
+  need(user, 'shop.manage', 'Du har ikke rettighet til butikken.');
+  const def = listingDef(params.id);
+  if (!def) fail(404, 'Fant ikke bedriften.');
+  const st = await listingState(db, def.id);
+  if (body.action === 'frigi') {
+    await DB.set(db, 'shop/' + def.id, { id: def.id, status: 'ledig', owner: null, txn: null, sold_at: 0, reserved_by: null, reserved_until: 0 });
+    await notify(C, 'Bedrift frigitt', `**${user.name || user.username}** frigjorde **${def.name}**${st.owner ? ` fra <@${st.owner}>` : ''}.`, 0x2b2425);
+    return { ok: true };
+  }
+  if (body.action === 'tildel') {
+    const id = String(body.userId || '').trim();
+    if (!/^\d{15,21}$/.test(id)) fail(400, 'Skriv inn en gyldig Discord-ID.');
+    const u = await DB.get(db, 'users/' + id);
+    if (!u) fail(404, 'Personen har ikke logget inn på nettsiden ennå.');
+    await DB.set(db, 'shop/' + def.id, { id: def.id, status: 'solgt', owner: id, txn: st.txn || null, sold_at: Date.now(), manual: true, reserved_by: null, reserved_until: 0 });
+    await notify(C, 'Bedrift tildelt', `**${user.name || user.username}** ga **${def.name}** til <@${id}>.`, 0x2b2425);
+    return { ok: true };
+  }
+  fail(400, 'Ukjent handling.');
+}, { auth: 'staff' });
+/* FiveM: hvem eier hvilken bedrift */
+route('GET', '/api/fivem/businesses', async ({ C, db, req }) => {
+  if (!C.fivemKey || !safeEq(req.headers.get('x-api-key') || '', C.fivemKey)) fail(401, 'Ugyldig API-nøkkel.');
+  const all = await allListings(db);
+  return { businesses: all.filter((x) => x.st.status === 'solgt').map((x) => ({ id: x.def.id, type: x.def.type, name: x.def.name, owner: x.st.owner })) };
+}, { raw: true });
 
 /* ---- Discord og FiveM ---- */
 route('POST', '/api/discord/interactions', ({ C, db, req }) => interactions(C, db, req), { raw: true });

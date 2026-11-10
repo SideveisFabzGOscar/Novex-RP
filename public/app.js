@@ -484,15 +484,16 @@ function vBiz(){
    ========================================================= */
 const {FORMS,JOBS,CATS,validate,PERMS,PERM_KEYS,PRESETS,appPerm}=window.NOVEX_FORMS;
 const can=p=>!!(ST.user&&ST.user.perms&&ST.user.perms.includes(p));
+const SHOPDEF=window.NOVEX_SHOP;
 const PLABEL=Object.fromEntries(PERMS.map(p=>[p.k,p.label]));
 const STATUS={utkast:'Utkast',sendt:'Til behandling',godkjent:'Godkjent',avslatt:'Avslått'};
 const TSTATUS={apen:'Venter på staff',besvart:'Besvart',lukket:'Lukket'};
 const CFG={connect:'play.novexrp.no',invite:'',trailer:'',loginEnabled:true};
 const ST={ready:false,user:null,apps:[],tickets:[]};
-const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apen',tSort:'nyeste',tQ:'',myT:'alle',mySort:'nyeste',myQ:'',team:null,teamLoading:false,tEdit:null,tFound:null};
+const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apen',tSort:'nyeste',tQ:'',myT:'alle',mySort:'nyeste',myQ:'',shop:null,shopLoading:false,shopType:'alle',buy:null,sales:null,salesLoading:false,team:null,teamLoading:false,tEdit:null,tFound:null};
 const tno=id=>1000+Number(id);
 const app=$('#app');
-const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff','team','arkiv'];
+const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff','team','arkiv','salg'];
 let route='hjem';
 
 async function api(method,url,body){
@@ -550,37 +551,48 @@ function replaceApp(a){const i=ST.apps.findIndex(x=>x.id===a.id);if(i>=0)ST.apps
    ROUTER
    ========================================================= */
 function typing(){const a=document.activeElement;return a&&app.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)}
-function refresh(force){updateNav();if(!PANEL.includes(route))return;if(!force&&typing())return;render(true)}
+function refresh(force){updateNav();if(!PANEL.includes(route)&&route!=='butikk')return;if(!force&&typing())return;render(true)}
 function updateNav(){
   $('#panelBtn').textContent=ST.user?ST.user.name:'Logg inn';
-  /* staff får egne menyvalg øverst, så systemene er lette å finne */
+  /* Spillerpanel for alle innloggede, og én Staff-meny med alle staff-sidene */
   const L=$('#links');L.querySelectorAll('.dyn').forEach(x=>x.remove());
   if(!ST.user)return;
   const cur=route==='ticket'?V.ticketFrom:route==='soknad'?'soknader':route;
-  const add=(r,label,n)=>{const a=document.createElement('a');a.href='#'+r;a.dataset.r=r;a.className='dyn'+(cur===r?' on':'');a.textContent=label;if(n){const b=document.createElement('span');b.className='ncount';b.textContent=n;a.append(b)}L.append(a)};
-  add('panel','Spillerpanel');
-  if(ST.user.isStaff){const o=(V.staff&&V.staff.overview)||V.ov;add('staff','Staff',o?(o.pending||0)+(o.openTickets||0):0)}
-  if(can('tickets.view'))add('arkiv','Alle tickets');
-  if(can('staff.manage'))add('team','Staff-team');
+  const link=(r,label,n)=>{const a=document.createElement('a');a.href='#'+r;a.dataset.r=r;a.className='dyn'+(cur===r?' on':'');a.textContent=label;if(n){const b=document.createElement('span');b.className='ncount';b.textContent=n;a.append(b)}return a};
+  L.append(link('panel','Spillerpanel'));
+  if(!ST.user.isStaff)return;
+  const o=(V.staff&&V.staff.overview)||V.ov,n=o?(o.pending||0)+(o.openTickets||0):0;
+  const items=[['staff','Oversikt',n]];
+  if(can('tickets.view'))items.push(['arkiv','Alle tickets']);
+  if(can('shop.manage'))items.push(['salg','Salg']);
+  if(can('staff.manage'))items.push(['team','Staff-team']);
+  const dd=document.createElement('div');dd.className='dyn dd'+(items.some(x=>x[0]===cur)?' on':'');
+  const b=document.createElement('button');b.type='button';b.className='ddb';b.id='ddBtn';b.setAttribute('aria-expanded','false');b.textContent='Staff';
+  if(n){const c=document.createElement('span');c.className='ncount';c.textContent=n;b.append(c)}
+  const m=document.createElement('div');m.className='ddm';items.forEach(x=>m.append(link(...x)));
+  dd.append(b,m);L.append(dd);
 }
 function render(keepScroll){
   route=(location.hash||'#hjem').slice(1)||'hjem';
   document.querySelectorAll('#links a').forEach(a=>a.classList.toggle('on',a.dataset.r===route));
   $('#links').classList.remove('open');$('#menuBtn').setAttribute('aria-expanded','false');
   updateNav();
-  const home=!['koble-til','regler','bedrifter',...PANEL].includes(route);
+  const home=!['koble-til','regler','bedrifter','butikk',...PANEL].includes(route);
   $('#home').hidden=!home;app.hidden=home;
   if(home){if(G.ok)requestAnimationFrame(resizeGL);return}
   let html;
   if(route==='koble-til')html=vConnect();
   else if(route==='regler')html=vRules();
   else if(route==='bedrifter')html=vBiz();
+  else if(route==='butikk')html=vShop();
   else html=vPanel();
   app.innerHTML=html;bindTilt(app);
   if(!keepScroll)scrollTo(0,0);
+  if((route==='butikk'||route==='panel')&&!V.shop&&ST.ready)loadShop();
   if(ST.user){
     if((route==='staff'||route==='arkiv')&&ST.user.isStaff&&!V.staff)loadStaff();
     if(route==='team'&&can('staff.manage')&&!V.team)loadTeam();
+    if(route==='salg'&&can('shop.manage')&&!V.sales)loadSales();
     if(route==='ticket'&&V.ticket&&(!V.ticketData||V.ticketData.ticket.id!==V.ticket))loadTicket();
   }
 }
@@ -609,9 +621,10 @@ function vPanel(){
   const nav=[['panel','Oversikt'],['soknader','Mine søknader',ST.apps.length],['whitelist','Whitelist'],['stillinger','Stillinger'],['tickets','Tickets',openT]];
   if(u.isStaff)nav.push(['staff','Staff',V.staff&&V.staff.overview?V.staff.overview.pending:0]);
   if(can('tickets.view'))nav.push(['arkiv','Alle tickets']);
+  if(can('shop.manage'))nav.push(['salg','Salg']);
   if(can('staff.manage'))nav.push(['team','Staff-team']);
   const act=route==='soknad'?'soknader':route==='ticket'?V.ticketFrom:route;
-  const views={panel:pOverview,soknader:pApps,whitelist:pWhitelist,stillinger:pJobs,tickets:pTickets,soknad:pForm,ticket:pTicket,staff:()=>u.isStaff?pStaff():pOverview(),team:()=>can('staff.manage')?pTeam():pOverview(),arkiv:()=>can('tickets.view')?pArchive():pOverview()};
+  const views={panel:pOverview,soknader:pApps,whitelist:pWhitelist,stillinger:pJobs,tickets:pTickets,soknad:pForm,ticket:pTicket,staff:()=>u.isStaff?pStaff():pOverview(),team:()=>can('staff.manage')?pTeam():pOverview(),arkiv:()=>can('tickets.view')?pArchive():pOverview(),salg:()=>can('shop.manage')?pSales():pOverview()};
   return `<div class="wrap panel">
     <aside class="side">
       <div class="who">${avatar(u)}<div><b>${esc(u.name)}</b><small>${u.isStaff?esc(u.staffTitle||'Staff'):'Spillerpanel'}</small></div></div>
@@ -635,6 +648,7 @@ function pOverview(){
       <div style="flex:1;min-width:0"><h2>${esc(u.name)}</h2>
       <div class="kv"><div><span>Discord-ID</span><b class="mono">${esc(u.id)}</b></div><div><span>Tilgang</span><b>${u.isStaff?esc(u.staffTitle||'Staff'):approvedWL()?'Whitelistet':'Spiller'}</b></div><div><span>Registrert</span><b>${fdate(u.createdAt)}</b></div></div></div></div>
     <div class="card" style="display:grid;gap:14px"><h3>Whitelist</h3>${wlCard}</div>
+    ${myBizCard()}
     <div><h3 style="font-size:34px;margin-bottom:14px">Søknadene dine</h3>${apps.length?`<div class="list">${apps.slice(0,5).map(a=>`<button class="li" data-open="${a.id}"><span class="l"><b>${FORMS[a.form]?FORMS[a.form].title:a.form}</b>${pill(a.status)}</span><small>Opprettet ${fdate(a.createdAt)}</small></button>`).join('')}</div>`:`<p class="muted">Ingen søknader ennå.</p>`}</div>
   </div>`;
 }
@@ -858,6 +872,99 @@ function openEdit(m){V.tEdit={id:m.id,name:m.name,avatarUrl:m.avatarUrl,title:m.
 function readEdit(){const E=V.tEdit;if(!E)return;const t=$('#tmTitle');if(t)E.title=t.value;E.perms=[...document.querySelectorAll('[data-perm]')].filter(c=>c.checked).map(c=>c.dataset.perm)}
 
 /* =========================================================
+   BUTIKK: bedrifter som selges via Tebex
+   ========================================================= */
+const kr=n=>`${Number(n).toLocaleString('nb-NO')}<small>kr</small>`;
+const SLABEL={ledig:'Ledig',reservert:'Reservert',solgt:'Solgt'};
+async function loadShop(){
+  if(V.shopLoading)return;V.shopLoading=true;
+  try{V.shop=await api('GET','/api/shop')}catch(e){V.shop={open:false,listings:[],owned:[],error:e.error}}
+  V.shopLoading=false;if(route==='butikk'||route==='panel')refresh(true);
+}
+function myBizCard(){
+  const o=V.shop&&V.shop.owned;if(!o||!o.length)return '';
+  return `<div class="card" style="display:grid;gap:12px"><h3>Mine bedrifter</h3>${o.map(b=>`<div class="row"><div class="mark" style="width:42px;height:42px;font-size:18px;transform:none">${SHOPDEF.TYPES[b.type].mark}</div><div><b>${esc(b.name)}</b><br><small class="muted">${SHOPDEF.TYPES[b.type].label} · eid siden ${fdate(b.since)}</small></div></div>`).join('')}<p class="muted" style="font-size:14px">Bedriften er aktiv i spillet neste gang du kobler til. Trenger du hjelp, lager du en ticket.</p></div>`;
+}
+function shopCard(l){
+  const T=SHOPDEF.TYPES[l.type],mine=l.mine&&l.status==='solgt',held=l.mine&&l.status==='reservert';
+  const pill=mine?'<span class="pill din">Din</span>':held?'<span class="pill reservert">Holdt av til deg</span>':`<span class="pill ${l.status}">${SLABEL[l.status]}</span>`;
+  let btn;
+  if(mine)btn='<a class="btn sm" href="#panel">Se i panelet</a>';
+  else if(l.status==='solgt')btn='<button class="btn sm" disabled>Solgt</button>';
+  else if(l.status==='reservert'&&!held)btn='<button class="btn sm" disabled>Noen holder på å kjøpe</button>';
+  else if(!V.shop.open||!l.ready)btn='<button class="btn sm" disabled>Åpner snart</button>';
+  else btn=`<button class="btn red sm" data-buy="${l.id}">${held?'Fullfør kjøpet':'Kjøp bedriften'}</button>`;
+  return `<div class="scard ${l.status} ${mine?'mine':''}"><div class="top"><div class="mark">${T.mark}</div>${pill}</div>
+    <div><h3>${esc(l.name)}</h3><span class="area">${T.label} · ${esc(l.area)}</span></div>
+    <p class="muted" style="font-size:15px">${esc(T.desc)}</p>
+    <ul>${T.includes.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>
+    <div class="spread" style="margin-top:4px"><span class="price">${kr(l.price)}</span>${btn}</div></div>`;
+}
+function vShop(){
+  const head=phead('Butikk','Kjøp din egen bedrift i Novex. Bensinstasjoner, dagligvare, kafeer og mekanikere. Hver bedrift finnes bare én gang, og når den er solgt, er den borte.','Bedrifter til salgs');
+  if(!V.shop)return head+`<div class="wrap page">${loading('Henter butikken …')}</div>`;
+  const S=V.shop,types=['alle',...Object.keys(SHOPDEF.TYPES)];
+  const list=S.listings.filter(l=>V.shopType==='alle'||l.type===V.shopType);
+  const held=S.listings.find(l=>l.mine&&l.status==='reservert');
+  const B=V.buy&&S.listings.find(l=>l.id===V.buy);
+  let notice='';
+  if(!S.open)notice=`<div class="notice"><span><b>Butikken åpner snart.</b> Du kan se hvilke bedrifter som kommer, men kjøp er ikke åpnet ennå.</span></div>`;
+  else if(!ST.user)notice=`<div class="notice"><span>Logg inn med Discord for å kjøpe. Bedriften knyttes til Discord-kontoen din.</span><a class="btn sm discord" href="/auth/discord">Logg inn med Discord</a></div>`;
+  else if(!ST.user.whitelisted)notice=`<div class="notice"><span>Du må være whitelistet før du kan kjøpe en bedrift.</span><a class="btn sm" href="#whitelist">Søk whitelist</a></div>`;
+  else if(S.owned.length>=S.maxPerPlayer)notice=`<div class="notice"><span>Du eier allerede ${S.owned.length===1?'en bedrift':S.owned.length+' bedrifter'}. Hver spiller kan eie ${S.maxPerPlayer===1?'én':S.maxPerPlayer}.</span><a class="btn sm" href="#panel">Se mine bedrifter</a></div>`;
+  if(held&&!B)notice+=`<div class="notice" style="margin-top:12px"><span><b>${esc(held.name)}</b> er holdt av til deg til kl. ${fclock(held.reservedUntil)}. Har du betalt, vises bedriften som din når Tebex har bekreftet betalingen, som regel innen et minutt.</span><div class="row"><button class="btn sm" id="shopReload">Sjekk status</button><button class="btn sm ghost" data-unbuy="${held.id}">Avbryt</button></div></div>`;
+  const checkout=B?`<div class="checkout" id="checkout">
+    <div class="spread"><div><span class="eyebrow" style="margin-bottom:6px">Kjøp</span><h3 style="font-size:36px">${esc(B.name)}</h3><span class="muted">${SHOPDEF.TYPES[B.type].label} · ${esc(B.area)}</span></div><span class="price">${kr(B.price)}</span></div>
+    <div><b>Vilkår</b><ol class="terms">${SHOPDEF.TERMS.map(t=>`<li>${esc(t)}</li>`).join('')}</ol></div>
+    <label class="ok"><input type="checkbox" id="buyTerms"> Jeg har lest vilkårene og forstår at kjøpet gjelder en bedrift i spillet.</label>
+    <p class="muted" style="font-size:14px">Du sendes videre til Tebex for å betale. Bedriften holdes av til deg i ${SHOPDEF.RESERVE_MINUTES} minutter. Logg inn på Tebex med samme Discord-konto som her.</p>
+    <span class="err" id="buyErr" hidden style="color:var(--bad);font-weight:600"></span>
+    <div class="row"><button class="btn red" id="buyGo">Gå til betaling</button><button class="btn ghost" id="buyCancel">Avbryt</button></div>
+  </div>`:'';
+  const free=S.listings.filter(l=>l.status==='ledig').length;
+  return head+`<div class="wrap page">
+    ${notice}${checkout}
+    <div class="spread" style="margin-top:${notice||checkout?'28px':'0'}"><div class="tabs shoptabs">${types.map(t=>`<button data-stype="${t}" class="${V.shopType===t?'on':''}">${t==='alle'?'Alle':SHOPDEF.TYPES[t].plural} <span class="mono">${t==='alle'?S.listings.length:S.listings.filter(l=>l.type===t).length}</span></button>`).join('')}</div><span class="muted">${free} av ${S.listings.length} ledige</span></div>
+    <div class="sgrid">${list.map(shopCard).join('')}</div>
+    <div class="legal"><span>Betaling håndteres av Tebex. Kjøp gjelder bare innhold på Project Novex og gir ingen penger eller gjenstander utenfor spillet.</span><span>Project Novex er ikke godkjent, sponset eller støttet av Rockstar Games, Take-Two Interactive eller Cfx.re.</span>${S.email?`<span>Kontakt om kjøp: <a href="mailto:${esc(S.email)}">${esc(S.email)}</a></span>`:''}</div>
+  </div>`;
+}
+
+/* ---------- staff: salg ---------- */
+async function loadSales(){
+  if(V.salesLoading)return;V.salesLoading=true;
+  try{V.sales=await api('GET','/api/staff/shop')}catch(e){errToast(e);V.sales={listings:[],purchases:[]}}
+  V.salesLoading=false;if(route==='salg')refresh(true);
+}
+const PSTATUS={betalt:'Betalt',refundert:'Refundert',tvist:'Tvist','tvist-tapt':'Tvist tapt'};
+const RESULT={tildelt:'Tildelt','konflikt':'Allerede eid, refunder','mangler-kjoper':'Fant ikke kjøperen'};
+function pSales(){
+  const S=V.sales;
+  if(!S)return `<h1 class="ph">Salg</h1>`+loading('Henter salg …');
+  const sold=S.listings.filter(l=>l.status==='solgt').length,linked=S.listings.filter(l=>l.tebex).length;
+  const ok=(b,t)=>`<li><b class="${b?'y':'n'}">${b?'✓':'✕'}</b><span>${t}</span></li>`;
+  const setup=S.open&&linked===S.listings.length?'':`<div class="card" style="display:grid;gap:12px;margin-top:20px"><h3>Sett opp betaling</h3><ul class="setup">
+    ${ok(!!S.store,'Tebex-butikk koblet til (<span class="mono">TEBEX_STORE_URL</span> i Netlify)')}
+    ${ok(S.hasSecret,'Webhook-nøkkel lagt inn (<span class="mono">TEBEX_WEBHOOK_SECRET</span> i Netlify)')}
+    ${ok(linked===S.listings.length,`Tebex-pakke koblet til hver bedrift (${linked} av ${S.listings.length}, i <span class="mono">public/shop.js</span>)`)}
+    ${ok(!!S.email,'Kontakt-e-post vises i butikken (<span class="mono">SHOP_CONTACT_EMAIL</span>)')}
+  </ul><p class="muted" style="font-size:14px">Butikken åpner for kjøp når de to første er på plass. Bedrifter uten Tebex-pakke vises som «Åpner snart».</p></div>`;
+  const who=o=>o?`${esc(o.name)} <small class="mono muted">${esc(o.id)}</small>`:'–';
+  const row=l=>`<tr><td><b>${esc(l.name)}</b><small>${SHOPDEF.TYPES[l.type].label} · ${l.price} kr${l.tebex?` · pakke ${esc(l.tebex)}`:' · ikke koblet'}</small></td>
+    <td><span class="pill ${l.status}">${SLABEL[l.status]}</span>${l.manual?'<small>Tildelt manuelt</small>':''}</td>
+    <td>${l.status==='solgt'?who(l.owner)+(l.soldAt?`<small>siden ${fdate(l.soldAt)}</small>`:''):l.status==='reservert'?who(l.reservedBy)+`<small>holdt av til ${fclock(l.reservedUntil)}</small>`:'–'}</td>
+    <td>${l.status!=='ledig'?`<button class="btn sm danger" data-free="${l.id}">Frigi</button>`:`<div class="assign"><input type="text" placeholder="Discord-ID" id="as_${l.id}" inputmode="numeric" maxlength="21"><button class="btn sm" data-assign="${l.id}">Gi bort</button></div>`}</td></tr>`;
+  return `<div class="spread"><h1 class="ph">Salg</h1><div class="row"><a class="btn sm ghost" href="#butikk">Åpne butikken</a><button class="btn sm" id="salesReload">Oppdater</button></div></div>
+  <p class="pintro">Bedrifter som selges i butikken, hvem som eier dem, og alle kjøp fra Tebex. Når noen betaler, blir bedriften automatisk deres. Blir et kjøp refundert eller tapt i en tvist, blir bedriften ledig igjen.</p>
+  ${setup}
+  <div class="stats" style="margin-top:20px"><div class="stat"><b>${sold}</b><span>Solgt</span></div><div class="stat"><b>${S.listings.filter(l=>l.status==='ledig').length}</b><span>Ledige</span></div><div class="stat"><b>${S.listings.filter(l=>l.status==='reservert').length}</b><span>Under kjøp</span></div><div class="stat"><b>${S.purchases.filter(p=>p.status==='betalt').length}</b><span>Betalte kjøp</span></div></div>
+  <div class="ghead">Bedrifter</div>
+  <div class="tbl stbl"><table><thead><tr><th>Bedrift</th><th>Status</th><th>Eier</th><th></th></tr></thead><tbody>${S.listings.map(row).join('')}</tbody></table></div>
+  <div class="ghead">Kjøp fra Tebex</div>
+  ${S.purchases.length?`<div class="tbl stbl"><table><thead><tr><th>Når</th><th>Bedrift</th><th>Kjøper</th><th>Beløp</th><th>Status</th></tr></thead><tbody>${S.purchases.map(p=>`<tr><td>${ftime(p.at)}<small class="mono">${esc(p.txn)}</small></td><td>${p.items.map(i=>`<b>${esc(i.name)}</b><small>${RESULT[i.result]||esc(i.result)}</small>`).join('')||'–'}</td><td>${p.items.map(i=>who(i.owner)).join('<br>')||esc(p.buyerName||'–')}${p.buyerName?`<small>Tebex: ${esc(p.buyerName)}</small>`:''}</td><td>${esc(p.amount||'–')}</td><td><span class="pill ${p.status==='betalt'?'godkjent':'avslatt'}">${PSTATUS[p.status]||esc(p.status)}</span></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted" style="margin-top:14px">Ingen kjøp ennå.</p>'}`;
+}
+
+/* =========================================================
    ACTIONS
    ========================================================= */
 function go(h){V.errors={};if(location.hash==='#'+h)render();else location.hash=h}
@@ -886,6 +993,7 @@ async function copyText(t,btn){
 }
 
 document.addEventListener('click',async e=>{
+  if(!e.target.closest('.dd'))document.querySelectorAll('.dd.open').forEach(d=>{d.classList.remove('open');d.firstChild.setAttribute('aria-expanded','false')});
   const el=e.target.closest('button,a,tr');if(!el)return;
   const d=el.dataset;
   if(d.copy){copyText(d.copy,el);return}
@@ -898,6 +1006,12 @@ document.addEventListener('click',async e=>{
   if(d.tab){V.tab=d.tab;render(true);return}
   if(d.stab){V.staffTab=d.stab;V.staff=null;render(true);return}
   if(d.tf){TK[d.tm].f=d.tf;render(true);return}
+  if(d.stype){V.shopType=d.stype;render(true);return}
+  if(d.buy){if(!ST.user){location.href='/auth/discord';return}V.buy=d.buy;render(true);const c=$('#checkout');if(c)c.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
+  if(d.unbuy){try{await api('POST',`/api/shop/${d.unbuy}/cancel`,{});toast('Reservasjonen er avbrutt')}catch(x){errToast(x)}V.shop=null;render(true);return}
+  if(d.free){if(el.dataset.sure!=='1'){el.dataset.sure='1';el.textContent='Trykk igjen for å frigi';setTimeout(()=>{if(el.isConnected){el.dataset.sure='';el.textContent='Frigi'}},4000);return}
+    el.disabled=true;try{await api('POST','/api/staff/shop/'+d.free,{action:'frigi'});toast('Bedriften er ledig igjen');V.sales=null;V.shop=null;render(true)}catch(x){el.disabled=false;errToast(x)}return}
+  if(d.assign){const v=($('#as_'+d.assign)||{}).value||'';el.disabled=true;try{await api('POST','/api/staff/shop/'+d.assign,{action:'tildel',userId:v.trim()});toast('Bedriften er gitt bort');V.sales=null;V.shop=null;render(true)}catch(x){el.disabled=false;errToast(x)}return}
   if(d.az){e.preventDefault();const el2=document.getElementById('az-'+d.tm+'-'+d.az);if(el2)el2.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'});return}
   if('newt' in d){V.newT=true;render(true);const s=$('#tSub');if(s)s.focus();return}
   if(d.ticket||d.sticket){V.ticket=Number(d.ticket||d.sticket);V.ticketFrom=d.sticket?(d.from||'staff'):'tickets';V.ticketData=null;go('ticket');return}
@@ -910,10 +1024,20 @@ document.addEventListener('click',async e=>{
     catch(x){el.disabled=false;errToast(x)}
     return}
   switch(el.id){
+    case 'ddBtn':{const d=el.parentElement;const o=d.classList.toggle('open');el.setAttribute('aria-expanded',o);break}
     case 'menuBtn':{const o=$('#links').classList.toggle('open');el.setAttribute('aria-expanded',o);break}
     case 'cinePlay':{const c=G.cine;if(!c)break;c.playing=!c.playing;el.classList.toggle('paused',!c.playing);el.setAttribute('aria-label',c.playing?'Pause':'Spill av');const v=$('#cineVideo');if(c.vidOn){if(c.playing)v.play().catch(()=>{});else v.pause()}break}
-    case 'logoutBtn':{e.preventDefault();try{await api('POST','/auth/logout')}catch(x){}ST.user=null;ST.apps=[];ST.tickets=[];V.staff=null;toast('Du er logget ut');location.hash='hjem';break}
+    case 'logoutBtn':{e.preventDefault();try{await api('POST','/auth/logout')}catch(x){}ST.user=null;ST.apps=[];ST.tickets=[];V.staff=null;V.shop=null;V.sales=null;toast('Du er logget ut');location.hash='hjem';break}
     case 'staffReload':V.staff=null;render(true);break;
+    case 'shopReload':V.shop=null;render(true);break;
+    case 'salesReload':V.sales=null;render(true);break;
+    case 'buyCancel':V.buy=null;render(true);break;
+    case 'buyGo':{
+      const err=$('#buyErr');if(!$('#buyTerms').checked){err.textContent='Du må godta vilkårene først.';err.hidden=false;break}
+      el.disabled=true;
+      try{const r=await api('POST',`/api/shop/${V.buy}/reserve`,{terms:true});el.textContent='Sender deg til Tebex …';location.href=r.checkout}
+      catch(x){el.disabled=false;err.textContent=x.error;err.hidden=false;V.shop=null;loadShop()}
+      break}
     case 'teamReload':V.team=null;render(true);break;
     case 'tmFind':teamFind();break;
     case 'tmCancel':V.tEdit=null;render(true);break;
@@ -984,6 +1108,7 @@ async function poll(){
     await Promise.all([loadApps(),loadTickets(),loadOv()]);
     if(route==='ticket'&&V.ticket){V.ticketData=await api('GET','/api/tickets/'+V.ticket)}
     if(route==='staff'||route==='arkiv'){V.staff=null}
+    if(route==='butikk'||route==='panel'){loadShop()}
     refresh();
   }catch(e){}
 }

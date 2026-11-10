@@ -41,3 +41,66 @@ AddEventHandler('playerConnecting', function(name, setKickReason, deferrals)
     end
   end, 'GET', '', { ['x-api-key'] = Config.ApiKey })
 end)
+
+--[[ Bedrifter kjøpt i butikken på nettsiden
+     Ressursen henter hvem som eier hvilken bedrift, og gir det videre til
+     bedriftsscriptet ditt. Bruk enten eventet eller exports:
+
+       AddEventHandler('novex:bedrifter', function(bedrifter)
+         -- bedrifter['kafe-torget'] = { id = 'kafe-torget', type = 'kafe', name = 'Kafé Torget', owner = '1229825750429991067' }
+       end)
+
+       exports['novex-whitelist']:GetBusinessOwner('kafe-torget')        -- Discord-ID eller nil
+       exports['novex-whitelist']:GetOwnedBusinesses(source)             -- liste over bedriftene spilleren eier
+       exports['novex-whitelist']:IsBusinessOwner(source, 'kafe-torget') -- true/false
+
+     ID-ene (kafe-torget osv.) står i public/shop.js på nettsiden. ]]
+local businesses = {}
+
+local function syncBusinesses()
+  PerformHttpRequest(Config.ApiUrl .. '/api/fivem/businesses', function(status, body)
+    if status ~= 200 or not body then
+      print(('[novex-whitelist] Kunne ikke hente bedrifter (%s)'):format(tostring(status)))
+      return
+    end
+    local ok, data = pcall(json.decode, body)
+    if not ok or not data or not data.businesses then return end
+    local fresh = {}
+    for _, b in ipairs(data.businesses) do fresh[b.id] = b end
+    businesses = fresh
+    TriggerEvent('novex:bedrifter', businesses)
+  end, 'GET', '', { ['x-api-key'] = Config.ApiKey })
+end
+
+CreateThread(function()
+  while true do
+    syncBusinesses()
+    Wait((Config.BusinessSyncMinutes or 2) * 60 * 1000)
+  end
+end)
+
+RegisterCommand('novex_bedrifter', function(src)
+  if src ~= 0 then return end -- bare fra serverkonsollen
+  syncBusinesses()
+  print('[novex-whitelist] Henter bedrifter på nytt')
+end, true)
+
+exports('GetBusinessOwner', function(id)
+  local b = businesses[id]
+  return b and b.owner or nil
+end)
+
+exports('GetOwnedBusinesses', function(src)
+  local discordId = getDiscordId(src)
+  local out = {}
+  if not discordId then return out end
+  for _, b in pairs(businesses) do
+    if b.owner == discordId then out[#out + 1] = b end
+  end
+  return out
+end)
+
+exports('IsBusinessOwner', function(src, id)
+  local b = businesses[id]
+  return b ~= nil and b.owner == getDiscordId(src)
+end)

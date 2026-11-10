@@ -52,6 +52,17 @@ button,input,select,textarea{font:inherit;color:inherit}
 .links a.on{color:#fff}
 .links a.on::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:2px;background:var(--red)}
 .links a.dyn{color:#fff;font-weight:700}
+.dd{position:relative;display:flex;align-items:center}
+.ddb{background:none;border:0;color:#fff;font-weight:700;font-size:15px;cursor:pointer;padding:4px 0;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.ddb::after{content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-2px);margin-left:6px}
+.dd.on .ddb{box-shadow:0 8px 0 -6px var(--red)}
+.ddm{display:none;position:absolute;top:calc(100% + 14px);left:-14px;min-width:190px;background:var(--night);border:1px solid var(--nline);border-radius:6px;padding:6px;z-index:90;box-shadow:0 20px 40px -20px rgba(0,0,0,.6)}
+.dd.open .ddm,.dd:hover .ddm,.dd:focus-within .ddm{display:grid}
+.dd:hover::after{content:"";position:absolute;left:0;right:0;top:100%;height:16px}
+.ddm a{padding:9px 12px!important;border-radius:4px;border:0!important}
+.ddm a:hover{background:var(--night3)}
+.ddm a.on::after{display:none}
+.ddm a.on{background:var(--night3)}
 .links .ncount{display:inline-block;margin-left:6px;font-family:var(--mono);font-size:11px;background:var(--red);color:#fff;border-radius:999px;padding:1px 7px;vertical-align:2px}
 .live{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.12em;color:#fff;white-space:nowrap}
 .live i{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(224,20,31,.6);animation:pulse 1.6s infinite}
@@ -61,6 +72,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   .links{display:none;position:absolute;top:68px;left:0;right:0;flex-direction:column;gap:0;background:var(--night);border-bottom:1px solid var(--nline);padding:6px max(16px,env(safe-area-inset-left,0px)) 12px}
   .links.open{display:flex}
   .links a{padding:12px 0;border-bottom:1px solid var(--nline)}
+  .dd{display:block}.ddb{display:none}.ddm{display:grid!important;position:static;border:0;padding:0;box-shadow:none;background:none}.ddm a{padding:12px 0!important;border-bottom:1px solid var(--nline)!important;border-radius:0}
   .links a.on::after{display:none}
   .menu-btn{display:block;margin-left:auto}
   .live{display:none}
@@ -398,6 +410,43 @@ td small{display:block;color:var(--muted)}
 .li b{font-weight:700}
 .li small{color:var(--muted)}
 
+/* butikk */
+.shoptabs{margin-top:0}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin-top:22px}
+.scard{position:relative;display:grid;gap:12px;align-content:start;background:#fff;border:1.5px solid var(--ink);border-radius:6px;padding:22px;transition:box-shadow .2s,transform .2s}
+.scard:hover{box-shadow:10px 10px 0 var(--red)}
+.scard.solgt{border-color:var(--line2);background:var(--paper2)}
+.scard.solgt:hover{box-shadow:none}
+.scard.mine{border-color:var(--ok);box-shadow:8px 8px 0 var(--oksoft)}
+.scard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.scard .mark{transform:none;width:52px;height:52px;font-size:24px}
+.scard.solgt .mark{background:var(--muted)}
+.scard h3{font-size:30px;overflow-wrap:anywhere}
+.scard .area{color:var(--muted);font-size:14px}
+.scard ul{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:14px;color:var(--ink2)}
+.scard li{display:flex;gap:9px;align-items:baseline}
+.scard li::before{content:"";width:7px;height:7px;background:var(--red);flex:none}
+.price{font-family:var(--display);font-weight:900;font-size:40px;line-height:1}
+.price small{font-family:var(--body);font-size:14px;font-weight:600;color:var(--muted);margin-left:4px}
+.pill.ledig{background:var(--oksoft);color:var(--ok)}
+.pill.reservert{background:var(--warnsoft);color:var(--warn)}
+.pill.solgt{background:var(--paper2);color:var(--muted)}
+.pill.din{background:var(--ok);color:#fff}
+.checkout{border:2px solid var(--ink);border-radius:6px;background:#fff;padding:24px;display:grid;gap:16px;margin-top:22px}
+.checkout .terms{display:grid;gap:8px;margin:0;padding-left:20px;color:var(--ink2);font-size:15px}
+.checkout label.ok{display:flex;gap:10px;align-items:flex-start;font-weight:600;cursor:pointer}
+.checkout label.ok input{width:18px;height:18px;margin-top:3px;accent-color:var(--red);flex:none}
+.legal{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);display:grid;gap:6px}
+.setup{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.setup li{display:flex;gap:10px;align-items:baseline}
+.setup li b{min-width:22px}
+.setup .y{color:var(--ok)}.setup .n{color:var(--bad)}
+.stbl td,.stbl th{padding:12px 14px}
+.stbl tbody tr{cursor:default}
+.stbl tbody tr:hover td{background:transparent}
+.assign{display:flex;gap:6px;flex-wrap:wrap}
+.assign input{width:190px;padding:7px 10px;font-size:14px}
+
 /* ticket-lister */
 .ttools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .ttools input{flex:1 1 260px;max-width:440px}
@@ -518,6 +567,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink);box
       <a href="#regler" data-r="regler">Regler</a>
       <a href="#bedrifter" data-r="bedrifter">Bedrifter</a>
       <a href="#stillinger" data-r="stillinger">Stillinger</a>
+      <a href="#butikk" data-r="butikk">Butikk</a>
       <a href="#tickets" data-r="tickets">Support</a>
     </nav>
     <span class="live" id="live" hidden></span>
@@ -702,6 +752,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink);box
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="forms.js"></script>
+<script src="shop.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -11,3 +11,6 @@ Config.Website = 'novexrp.no'
 
 -- true = slipp inn alle hvis nettsiden er nede. false = slipp ingen inn.
 Config.AllowWhenApiDown = false
+
+-- Hvor ofte bedriftseiere hentes fra nettsiden (minutter)
+Config.BusinessSyncMinutes = 2

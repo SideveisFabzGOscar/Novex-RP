@@ -113,6 +113,7 @@
     { k: 'apps.jobs', label: 'Behandle jobb-, bedrift- og gjengsøknader', desc: 'Politi, ambulanse, mekaniker, bilselger, bedrift og gjeng.' },
     { k: 'apps.staff', label: 'Behandle staff-søknader', desc: 'Godkjenne og avslå nye staff.' },
     { k: 'discord.manage', label: 'Discord-oppsett', desc: 'Registrere kommandoer og legge ut ticket-panelet.' },
+    { k: 'shop.manage', label: 'Butikk og salg', desc: 'Se alle kjøp, frigi bedrifter og tildele dem manuelt.' },
     { k: 'staff.manage', label: 'Administrere staff', desc: 'Legge til og fjerne staff. Kan bare gi rettigheter de har selv.' }
   ];
   const PERM_KEYS = PERMS.map(function (p) { return p.k; });
