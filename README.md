@@ -16,6 +16,22 @@ Prosjektet har ingen npm-pakker. Det trenger bare **Node.js 22.13 eller nyere**.
 
 ---
 
+## Legg ut på Netlify (anbefalt)
+
+Prosjektet kan kjøres helt på Netlify uten egen server. API-et ligger i `netlify/functions/api.mjs`, og data lagres i Netlify Blobs, så du trenger ingen database.
+
+1. På Netlify: **Add new project → Import an existing project → GitHub → Novex-RP**. Innstillingene leses fra `netlify.toml`.
+2. Under **Project configuration → Environment variables**, legg inn de samme variablene som i `.env.example`. `BASE_URL` trengs ikke, Netlify fyller den inn selv.
+3. I Discord Developer Portal:
+   - **OAuth2 → Redirects:** `https://<din-side>.netlify.app/auth/callback`
+   - **General Information → Interactions Endpoint URL:** `https://<din-side>.netlify.app/api/discord/interactions`
+   - Kopier **Public Key** fra samme side til `DISCORD_PUBLIC_KEY`.
+4. Deploy på nytt etter at variablene er lagt inn. Logg inn på siden som staff, gå til Staff og trykk **Registrer Discord-kommandoer**.
+
+**Ticket-boten på Netlify** svarer på knapper og skjemaer i stedet for å være tilkoblet hele tiden. Spillere og staff svarer med **Svar**-knappen i ticket-kanalen, og svaret synkes med nettsiden. Vanlige meldinger som skrives rett i kanalen, synkes ikke. Vil du ha det, kjører du `server.js` på en egen server i stedet (se under).
+
+## Kjør på egen server (alternativ)
+
 ## 1. Lag en Discord-app
 
 1. Gå til <https://discord.com/developers/applications> og trykk **New Application**. Kall den «Novex RP».

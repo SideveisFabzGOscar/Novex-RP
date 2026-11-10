@@ -723,7 +723,7 @@ function pStaff(){
     <div class="row"><button class="btn red sm" data-decide="godkjent" data-id="${a.id}">Godkjenn</button><button class="btn danger sm" data-decide="avslatt" data-id="${a.id}">Avslå</button></div>`
     :`<div class="reply ${a.status==='godkjent'?'ok':'bad'}"><b>Svar sendt</b><p>${esc(a.reply)}</p></div>`}
   </div>`;
-  return `<div class="spread"><h1 class="ph">Staff</h1><button class="btn sm" id="staffReload">Oppdater</button></div>
+  return `<div class="spread"><h1 class="ph">Staff</h1><div class="row">${CFG.discordTickets?'<button class="btn sm ghost" id="botRegister">Registrer Discord-kommandoer</button>':''}<button class="btn sm" id="staffReload">Oppdater</button></div></div>
   <div class="stats" style="margin-top:20px"><div class="stat"><b>${o.pending??0}</b><span>Søknader venter</span></div><div class="stat"><b>${o.openTickets??0}</b><span>Tickets venter</span></div><div class="stat"><b>${o.users??0}</b><span>Registrerte spillere</span></div><div class="stat"><b>${o.whitelisted??0}</b><span>Whitelistet</span></div></div>
   <div class="ghead">Søknader</div>
   <div class="tabs"><button data-stab="venter" class="${V.staffTab==='venter'?'on':''}">Venter</button><button data-stab="behandlet" class="${V.staffTab==='behandlet'?'on':''}">Behandlet</button></div>
@@ -786,6 +786,7 @@ document.addEventListener('click',async e=>{
     case 'cinePlay':{const c=G.cine;if(!c)break;c.playing=!c.playing;el.classList.toggle('paused',!c.playing);el.setAttribute('aria-label',c.playing?'Pause':'Spill av');const v=$('#cineVideo');if(c.vidOn){if(c.playing)v.play().catch(()=>{});else v.pause()}break}
     case 'logoutBtn':{e.preventDefault();try{await api('POST','/auth/logout')}catch(x){}ST.user=null;ST.apps=[];ST.tickets=[];V.staff=null;toast('Du er logget ut');location.hash='hjem';break}
     case 'staffReload':V.staff=null;render(true);break;
+    case 'botRegister':{el.disabled=true;try{await api('POST','/api/staff/discord/register',{});toast('/ticket og /ticket-panel er klare i Discord')}catch(x){errToast(x)}el.disabled=false;break}
     case 'delApp':{const id=V.cur;el.disabled=true;try{await api('DELETE','/api/apps/'+id);ST.apps=ST.apps.filter(a=>a.id!==id);toast('Utkastet er slettet');go('soknader')}catch(x){el.disabled=false;errToast(x)}break}
     case 'submitApp':{
       clearTimeout(saveT);const a=findApp(V.cur),answers=formAnswers();if(!a||!answers)break;a.answers=answers;
