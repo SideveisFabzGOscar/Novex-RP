@@ -33,16 +33,16 @@
 
   /* id må aldri endres etter at en bedrift er solgt. price er i hele kroner. */
   const LISTINGS = [
-    { id: 'bensin-sentrum', type: 'bensin', name: 'Bensinstasjon Sentrum', area: 'Sentrum', price: 249, tebex: '' },
-    { id: 'bensin-motorveien', type: 'bensin', name: 'Bensinstasjon Motorveien', area: 'Motorveien nord', price: 249, tebex: '' },
-    { id: 'bensin-orkenen', type: 'bensin', name: 'Bensinstasjon Ørkenen', area: 'Ørkenen', price: 199, tebex: '' },
-    { id: 'dagligvare-sentrum', type: 'dagligvare', name: 'Dagligvare Sentrum', area: 'Sentrum', price: 199, tebex: '' },
-    { id: 'dagligvare-havna', type: 'dagligvare', name: 'Dagligvare Havna', area: 'Havna', price: 199, tebex: '' },
-    { id: 'dagligvare-nord', type: 'dagligvare', name: 'Dagligvare Nord', area: 'Nord', price: 149, tebex: '' },
-    { id: 'kafe-torget', type: 'kafe', name: 'Kafé Torget', area: 'Sentrum', price: 149, tebex: '' },
-    { id: 'kafe-stranda', type: 'kafe', name: 'Kafé Stranda', area: 'Vest', price: 149, tebex: '' },
-    { id: 'mekaniker-sentrum', type: 'mekaniker', name: 'Mekaniker Sentrum', area: 'Sentrum', price: 299, tebex: '' },
-    { id: 'mekaniker-nord', type: 'mekaniker', name: 'Mekaniker Nord', area: 'Nord', price: 249, tebex: '' }
+    { id: 'bensin-sentrum', type: 'bensin', name: 'Bensinstasjon Sentrum', area: 'Sentrum', price: 749, tebex: '' },
+    { id: 'bensin-motorveien', type: 'bensin', name: 'Bensinstasjon Motorveien', area: 'Motorveien nord', price: 749, tebex: '' },
+    { id: 'bensin-orkenen', type: 'bensin', name: 'Bensinstasjon Ørkenen', area: 'Ørkenen', price: 749, tebex: '' },
+    { id: 'dagligvare-sentrum', type: 'dagligvare', name: 'Dagligvare Sentrum', area: 'Sentrum', price: 599, tebex: '' },
+    { id: 'dagligvare-havna', type: 'dagligvare', name: 'Dagligvare Havna', area: 'Havna', price: 599, tebex: '' },
+    { id: 'dagligvare-nord', type: 'dagligvare', name: 'Dagligvare Nord', area: 'Nord', price: 599, tebex: '' },
+    { id: 'kafe-torget', type: 'kafe', name: 'Kafé Torget', area: 'Sentrum', price: 599, tebex: '' },
+    { id: 'kafe-stranda', type: 'kafe', name: 'Kafé Stranda', area: 'Vest', price: 599, tebex: '' },
+    { id: 'mekaniker-sentrum', type: 'mekaniker', name: 'Mekaniker Sentrum', area: 'Sentrum', price: 749, tebex: '' },
+    { id: 'mekaniker-nord', type: 'mekaniker', name: 'Mekaniker Nord', area: 'Nord', price: 749, tebex: '' }
   ];
 
   /* hvor mange bedrifter én spiller kan eie */
