@@ -28,6 +28,28 @@ Prosjektet kan kjøres helt på Netlify uten egen server. API-et ligger i `netli
    - Kopier **Public Key** fra samme side til `DISCORD_PUBLIC_KEY`.
 4. Deploy på nytt etter at variablene er lagt inn. Logg inn på siden som staff, gå til Staff og trykk **Registrer Discord-kommandoer**.
 
+### Staff-team og rettigheter
+
+Eiere står i `STAFF_DISCORD_IDS` og har alltid alle rettigheter. Andre gjøres til staff på nettsiden under **Spillerpanel → Staff-team**:
+
+1. Søk etter personen (de må ha logget inn én gang) eller lim inn Discord-ID-en.
+2. Gi en tittel og velg rettigheter, eller bruk et hurtigvalg (Support, Moderator, Admin, Head Admin).
+3. Trykk **Legg til som staff**. Endringen gjelder med en gang.
+
+| Rettighet | Gir tilgang til |
+|---|---|
+| Se og svare på tickets | Alle tickets på nettsiden og ticket-kanalene i Discord |
+| Lukke og slette tickets | Lukke, åpne og slette ticket-kanaler |
+| Behandle whitelist-søknader | Godkjenne og avslå whitelist |
+| Behandle jobb-, bedrift- og gjengsøknader | Politi, ambulanse, mekaniker, bilselger, bedrift og gjeng |
+| Behandle staff-søknader | Nye staff-søknader |
+| Discord-oppsett | Registrere kommandoer og legge ut ticket-panelet |
+| Administrere staff | Legge til og fjerne staff. Kan bare gi rettigheter de har selv, og bare eieren kan gi denne |
+
+Ingen kan endre sine egne rettigheter eller eierne. Alle endringer vises under **Siste endringer**. Har du også en staff-rolle i Discord (`DISCORD_STAFF_ROLE_IDS`), får de med rollen rettighetene i `DISCORD_STAFF_ROLE_PERMS`.
+
+Staff-team finnes foreløpig bare i Netlify-versjonen. `server.js` bruker fortsatt `STAFF_DISCORD_IDS` og staff-rollen.
+
 **Ticket-boten på Netlify** svarer på knapper og skjemaer i stedet for å være tilkoblet hele tiden. Spillere og staff svarer med **Svar**-knappen i ticket-kanalen, og svaret synkes med nettsiden. Vanlige meldinger som skrives rett i kanalen, synkes ikke. Vil du ha det, kjører du `server.js` på en egen server i stedet (se under).
 
 ## Kjør på egen server (alternativ)

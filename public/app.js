@@ -482,15 +482,17 @@ function vBiz(){
 /* =========================================================
    STATE + API
    ========================================================= */
-const {FORMS,JOBS,CATS,validate}=window.NOVEX_FORMS;
+const {FORMS,JOBS,CATS,validate,PERMS,PERM_KEYS,PRESETS,appPerm}=window.NOVEX_FORMS;
+const can=p=>!!(ST.user&&ST.user.perms&&ST.user.perms.includes(p));
+const PLABEL=Object.fromEntries(PERMS.map(p=>[p.k,p.label]));
 const STATUS={utkast:'Utkast',sendt:'Til behandling',godkjent:'Godkjent',avslatt:'Avslått'};
 const TSTATUS={apen:'Venter på staff',besvart:'Besvart',lukket:'Lukket'};
 const CFG={connect:'play.novexrp.no',invite:'',trailer:'',loginEnabled:true};
 const ST={ready:false,user:null,apps:[],tickets:[]};
-const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apne'};
+const V={cur:null,ticket:null,ticketData:null,ticketFrom:'tickets',ticketLoading:false,tab:'alle',errors:{},newT:false,staff:null,staffLoading:false,staffTab:'venter',staffT:'apne',team:null,teamLoading:false,tEdit:null,tFound:null};
 const tno=id=>1000+Number(id);
 const app=$('#app');
-const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff'];
+const PANEL=['panel','soknader','whitelist','stillinger','tickets','soknad','ticket','staff','team'];
 let route='hjem';
 
 async function api(method,url,body){
@@ -566,6 +568,7 @@ function render(keepScroll){
   if(!keepScroll)scrollTo(0,0);
   if(ST.user){
     if(route==='staff'&&ST.user.isStaff&&!V.staff)loadStaff();
+    if(route==='team'&&can('staff.manage')&&!V.team)loadTeam();
     if(route==='ticket'&&V.ticket&&(!V.ticketData||V.ticketData.ticket.id!==V.ticket))loadTicket();
   }
 }
@@ -593,11 +596,12 @@ function vPanel(){
   const u=ST.user,openT=ST.tickets.filter(t=>t.status!=='lukket').length;
   const nav=[['panel','Oversikt'],['soknader','Mine søknader',ST.apps.length],['whitelist','Whitelist'],['stillinger','Stillinger'],['tickets','Tickets',openT]];
   if(u.isStaff)nav.push(['staff','Staff',V.staff&&V.staff.overview?V.staff.overview.pending:0]);
+  if(can('staff.manage'))nav.push(['team','Staff-team']);
   const act=route==='soknad'?'soknader':route==='ticket'?V.ticketFrom:route;
-  const views={panel:pOverview,soknader:pApps,whitelist:pWhitelist,stillinger:pJobs,tickets:pTickets,soknad:pForm,ticket:pTicket,staff:()=>u.isStaff?pStaff():pOverview()};
+  const views={panel:pOverview,soknader:pApps,whitelist:pWhitelist,stillinger:pJobs,tickets:pTickets,soknad:pForm,ticket:pTicket,staff:()=>u.isStaff?pStaff():pOverview(),team:()=>can('staff.manage')?pTeam():pOverview()};
   return `<div class="wrap panel">
     <aside class="side">
-      <div class="who">${avatar(u)}<div><b>${esc(u.name)}</b><small>${u.isStaff?'Staff':'Spillerpanel'}</small></div></div>
+      <div class="who">${avatar(u)}<div><b>${esc(u.name)}</b><small>${u.isStaff?esc(u.staffTitle||'Staff'):'Spillerpanel'}</small></div></div>
       ${nav.map(n=>`<a href="#${n[0]}" class="${act===n[0]?'on':''}">${n[1]}${n[2]?`<span class="count">${n[2]}</span>`:''}</a>`).join('')}
       <hr><a href="#hjem" id="logoutBtn">Logg ut</a>
     </aside>
@@ -616,7 +620,7 @@ function pOverview(){
   return `<div class="stack" style="margin-top:0">
     <div class="card dark profile">${avatar(u,'lg')}
       <div style="flex:1;min-width:0"><h2>${esc(u.name)}</h2>
-      <div class="kv"><div><span>Discord-ID</span><b class="mono">${esc(u.id)}</b></div><div><span>Tilgang</span><b>${u.isStaff?'Staff':approvedWL()?'Whitelistet':'Spiller'}</b></div><div><span>Registrert</span><b>${fdate(u.createdAt)}</b></div></div></div></div>
+      <div class="kv"><div><span>Discord-ID</span><b class="mono">${esc(u.id)}</b></div><div><span>Tilgang</span><b>${u.isStaff?esc(u.staffTitle||'Staff'):approvedWL()?'Whitelistet':'Spiller'}</b></div><div><span>Registrert</span><b>${fdate(u.createdAt)}</b></div></div></div></div>
     <div class="card" style="display:grid;gap:14px"><h3>Whitelist</h3>${wlCard}</div>
     <div><h3 style="font-size:34px;margin-bottom:14px">Søknadene dine</h3>${apps.length?`<div class="list">${apps.slice(0,5).map(a=>`<button class="li" data-open="${a.id}"><span class="l"><b>${FORMS[a.form]?FORMS[a.form].title:a.form}</b>${pill(a.status)}</span><small>Opprettet ${fdate(a.createdAt)}</small></button>`).join('')}</div>`:`<p class="muted">Ingen søknader ennå.</p>`}</div>
   </div>`;
@@ -689,12 +693,12 @@ function pTicket(){
   const d=V.ticketData,from=V.ticketFrom;
   const back=`<button class="back" data-go="${from}">${from==='staff'?'Staff':'Mine tickets'}</button>`;
   if(!d||d.ticket.id!==V.ticket)return back+loading('Henter ticketen …');
-  const t=d.ticket,asStaff=ST.user.isStaff&&!d.isOwner;
+  const t=d.ticket,asStaff=can('tickets.view')&&!d.isOwner,mayClose=d.isOwner||can('tickets.close');
   return back+`<h1 class="ph" style="margin-top:14px">${esc(t.subject)}</h1>
   <div class="row" style="margin-top:12px"><span class="mono muted">#${tno(t.id)}</span>${tpill(t.status)}<span class="muted">${esc(t.category)} · opprettet ${ftime(t.createdAt)}${d.owner&&asStaff?` · fra ${esc(d.owner.name)} (<span class="mono">${esc(d.owner.id)}</span>)`:''}</span>${t.channelUrl?`<a class="btn sm ghost" href="${esc(t.channelUrl)}" target="_blank" rel="noopener">Åpne i Discord</a>`:''}</div>
   <div class="thread">${d.messages.map(m=>`<div class="msg ${m.staff?'staff':''}"><header><b>${m.staff?`Novex <span class="r">Staff</span>${m.staffName?' · '+esc(m.staffName):''}`:esc(m.name)}</b><span>${ftime(m.createdAt)}${m.source==='discord'?' · via Discord':''}</span></header><p>${esc(m.body)}</p></div>`).join('')}</div>
-  ${t.status==='lukket'?`<div class="bar"><span class="muted">Ticketen er lukket.</span><button class="btn" id="tReopen">Åpne igjen</button></div>`
-  :`<div class="card" style="margin-top:20px;display:grid;gap:12px"><label for="tReply"><b>${asStaff?'Svar som staff':'Skriv et svar'}</b></label><textarea id="tReply" maxlength="4000"></textarea><div class="spread"><button class="btn ghost sm" id="tClose">Lukk ticket</button><button class="btn red" id="tReplyBtn">Send svar</button></div></div>`}`;
+  ${t.status==='lukket'?`<div class="bar"><span class="muted">Ticketen er lukket.</span>${mayClose?'<button class="btn" id="tReopen">Åpne igjen</button>':''}</div>`
+  :`<div class="card" style="margin-top:20px;display:grid;gap:12px"><label for="tReply"><b>${asStaff?'Svar som staff':'Skriv et svar'}</b></label><textarea id="tReply" maxlength="4000"></textarea><div class="spread">${mayClose?'<button class="btn ghost sm" id="tClose">Lukk ticket</button>':'<span></span>'}<button class="btn red" id="tReplyBtn">Send svar</button></div></div>`}`;
 }
 
 async function loadTicket(){
@@ -723,15 +727,70 @@ function pStaff(){
     <div class="row"><button class="btn red sm" data-decide="godkjent" data-id="${a.id}">Godkjenn</button><button class="btn danger sm" data-decide="avslatt" data-id="${a.id}">Avslå</button></div>`
     :`<div class="reply ${a.status==='godkjent'?'ok':'bad'}"><b>Svar sendt</b><p>${esc(a.reply)}</p></div>`}
   </div>`;
-  return `<div class="spread"><h1 class="ph">Staff</h1><div class="row">${CFG.discordTickets?'<button class="btn sm ghost" id="botRegister">Registrer Discord-kommandoer</button>':''}<button class="btn sm" id="staffReload">Oppdater</button></div></div>
+  const anyApps=['apps.whitelist','apps.jobs','apps.staff'].some(can);
+  return `<div class="spread"><h1 class="ph">Staff</h1><div class="row">${CFG.discordTickets&&can('discord.manage')?'<button class="btn sm ghost" id="botRegister">Registrer Discord-kommandoer</button>':''}${can('staff.manage')?'<a class="btn sm ghost" href="#team">Staff-team</a>':''}<button class="btn sm" id="staffReload">Oppdater</button></div></div>
+  <div class="row" style="margin-top:14px"><span class="muted" style="font-size:14px">Du er <b>${esc(ST.user.staffTitle||'Staff')}</b>. Rettigheter:</span><div class="tags">${ST.user.perms.map(p=>`<span class="ptag">${esc(PLABEL[p]||p)}</span>`).join('')||'<span class="ptag">Ingen</span>'}</div></div>
   <div class="stats" style="margin-top:20px"><div class="stat"><b>${o.pending??0}</b><span>Søknader venter</span></div><div class="stat"><b>${o.openTickets??0}</b><span>Tickets venter</span></div><div class="stat"><b>${o.users??0}</b><span>Registrerte spillere</span></div><div class="stat"><b>${o.whitelisted??0}</b><span>Whitelistet</span></div></div>
-  <div class="ghead">Søknader</div>
+  ${anyApps?`<div class="ghead">Søknader</div>
   <div class="tabs"><button data-stab="venter" class="${V.staffTab==='venter'?'on':''}">Venter</button><button data-stab="behandlet" class="${V.staffTab==='behandlet'?'on':''}">Behandlet</button></div>
-  <div class="stack">${s.apps.length?s.apps.map(appCard).join(''):`<p class="muted">${V.staffTab==='venter'?'Ingen søknader venter.':'Ingen behandlede søknader ennå.'}</p>`}</div>
-  <div class="ghead">Tickets</div>
+  <div class="stack">${s.apps.length?s.apps.map(appCard).join(''):`<p class="muted">${V.staffTab==='venter'?'Ingen søknader venter.':'Ingen behandlede søknader ennå.'}</p>`}</div>`:''}
+  ${can('tickets.view')?`<div class="ghead">Tickets</div>
   <div class="tabs"><button data-stt="apne" class="${V.staffT==='apne'?'on':''}">Åpne</button><button data-stt="alle" class="${V.staffT==='alle'?'on':''}">Alle</button></div>
-  <div class="list" style="margin-top:14px">${s.tickets.length?s.tickets.map(t=>`<button class="li" data-sticket="${t.id}"><span class="l"><span class="mono muted">#${tno(t.id)}</span><b>${esc(t.subject)}</b>${tpill(t.status)}</span><small>${esc(t.category)} · ${esc(t.user.name)} · ${fdate(t.updatedAt)}</small></button>`).join(''):`<p class="muted">Ingen tickets.</p>`}</div>`;
+  <div class="list" style="margin-top:14px">${s.tickets.length?s.tickets.map(t=>`<button class="li" data-sticket="${t.id}"><span class="l"><span class="mono muted">#${tno(t.id)}</span><b>${esc(t.subject)}</b>${tpill(t.status)}</span><small>${esc(t.category)} · ${esc(t.user.name)} · ${fdate(t.updatedAt)}</small></button>`).join(''):`<p class="muted">Ingen tickets.</p>`}</div>`:''}
+  ${!anyApps&&!can('tickets.view')?'<div class="empty" style="margin-top:28px"><h3>Ingen oppgaver ennå</h3><p>Du er staff, men har ikke fått rettigheter til søknader eller tickets. Spør eieren.</p></div>':''}`;
 }
+
+/* ---------- staff-team: legg til staff og velg rettigheter ---------- */
+async function loadTeam(){
+  if(V.teamLoading)return;V.teamLoading=true;
+  try{V.team=await api('GET','/api/staff/team')}catch(e){errToast(e);V.team={team:[],log:[]}}
+  V.teamLoading=false;if(route==='team')refresh(true);
+}
+const grantable=p=>ST.user.isOwner||(can(p)&&p!=='staff.manage');
+function editableMember(m){
+  if(m.owner||m.id===ST.user.id)return false;
+  if(ST.user.isOwner)return true;
+  return !m.perms.includes('staff.manage')&&m.perms.every(can);
+}
+const LOGV={'la til':'la til','endret':'endret','fjernet':'fjernet'};
+function pTeam(){
+  const T=V.team;
+  if(!T)return `<h1 class="ph">Staff-team</h1>`+loading('Henter staff …');
+  const E=V.tEdit;
+  const editor=E?`<div class="card" style="display:grid;gap:16px;margin-top:22px" id="tmEditor">
+    <div class="spread"><div class="row"><div class="av"><img src="${esc(E.avatarUrl||'')}" alt=""></div><div><h3 style="font-size:30px">${esc(E.name)}</h3><small class="muted mono">${esc(E.id)}</small></div></div>${E.isNew?'<span class="ptag red">Ny staff</span>':''}</div>
+    <div class="q" style="padding:0;border:0"><label for="tmTitle">Tittel</label><input type="text" id="tmTitle" class="short" maxlength="30" value="${esc(E.title)}" placeholder="F.eks. Moderator"><span class="hint">Vises i panelet. Rettighetene under bestemmer hva personen får gjøre.</span></div>
+    <div><b style="display:block;margin-bottom:8px">Hurtigvalg</b><div class="row">${PRESETS.map((p,i)=>`<button class="btn sm ghost" data-preset="${i}" ${p.perms.every(grantable)?'':'disabled'}>${esc(p.name)}</button>`).join('')}</div></div>
+    <div><b style="display:block;margin-bottom:8px">Rettigheter</b><div class="perms">${PERMS.map(p=>{const ok=grantable(p.k);return `<label class="perm ${ok?'':'off'}"><input type="checkbox" data-perm="${p.k}" ${E.perms.includes(p.k)?'checked':''} ${ok?'':'disabled'}><span><b>${esc(p.label)}</b><small>${esc(p.desc)}${ok?'':p.k==='staff.manage'?' Bare eieren kan gi denne.':' Du har ikke denne selv.'}</small></span></label>`}).join('')}</div></div>
+    <div class="spread"><div class="row"><button class="btn red" id="tmSave">${E.isNew?'Legg til som staff':'Lagre endringer'}</button><button class="btn ghost" id="tmCancel">Avbryt</button></div>${E.isNew?'':'<button class="btn danger sm" id="tmRemove">Fjern fra staff</button>'}</div>
+  </div>`:'';
+  const add=E?'':`<div class="card" style="display:grid;gap:12px;margin-top:22px">
+    <h3>Legg til staff</h3>
+    <p class="muted" style="font-size:15px">Søk etter noen som har logget inn på nettsiden, eller skriv inn Discord-ID-en deres.</p>
+    <div class="row"><input type="text" id="tmQ" class="short" placeholder="Navn, brukernavn eller Discord-ID" maxlength="40" autocomplete="off"><button class="btn" id="tmFind">Søk</button></div>
+    ${V.tFound?(V.tFound.length?`<div class="found">${V.tFound.map(p=>`<button data-pick="${esc(p.id)}"><div class="av"><img src="${esc(p.avatarUrl)}" alt=""></div><span><b>${esc(p.name)}</b> <small class="muted">@${esc(p.username)} · <span class="mono">${esc(p.id)}</span></small></span></button>`).join('')}</div>`:'<p class="muted" style="font-size:14px">Fant ingen som har logget inn. Skriv inn hele Discord-ID-en for å legge dem til likevel.</p>'):''}
+    <span class="hint muted" style="font-size:13px">Discord-ID finner du ved å slå på Utviklermodus i Discord og høyreklikke på personen → Kopier bruker-ID.</span>
+  </div>`;
+  const member=m=>`<div class="member"><div class="who2"><div class="av"><img src="${esc(m.avatarUrl)}" alt=""></div><div><div class="row" style="gap:8px"><b>${esc(m.name)}</b><span class="ptag ${m.owner?'red':'ink'}">${esc(m.title)}</span>${m.id===ST.user.id?'<small>(deg)</small>':''}</div><div class="tags">${m.owner?'<span class="ptag">Alle rettigheter</span>':m.perms.length?m.perms.map(p=>`<span class="ptag">${esc(PLABEL[p]||p)}</span>`).join(''):'<span class="ptag">Ingen rettigheter</span>'}</div><small class="mono">${esc(m.id)}${m.lastLogin?` · sist innlogget ${fdate(m.lastLogin)}`:' · har ikke logget inn ennå'}</small></div></div>${editableMember(m)?`<button class="btn sm" data-tedit="${esc(m.id)}">Endre</button>`:m.owner?'<small>Styres i Netlify</small>':''}</div>`;
+  return `<button class="back" data-go="staff">Staff</button><div class="spread" style="margin-top:14px"><h1 class="ph">Staff-team</h1><button class="btn sm" id="teamReload">Oppdater</button></div>
+  <p class="pintro">Gi folk staff-tilgang og velg nøyaktig hva de får gjøre. ${ST.user.isOwner?'Som eier kan du gi alle rettigheter.':'Du kan bare gi rettigheter du har selv.'} Staff med «Se og svare på tickets» får også tilgang til ticket-kanalene i Discord.</p>
+  ${editor}${add}
+  <div class="ghead">Staff (${T.team.length})</div>
+  <div class="list" style="margin-top:14px">${T.team.map(member).join('')}</div>
+  ${T.roleStaff?`<p class="muted" style="font-size:14px;margin-top:12px">Alle med staff-rollen i Discord får i tillegg: ${T.roleStaff.map(p=>esc(PLABEL[p]||p)).join(', ')}. Legger du dem til her, gjelder rettighetene du velger.</p>`:''}
+  ${T.log&&T.log.length?`<div class="ghead">Siste endringer</div><div class="logl" style="margin-top:14px">${T.log.map(l=>`<div><b>${esc(l.byName)}</b> ${LOGV[l.action]||esc(l.action)} <b>${esc(l.targetName)}</b>${l.action!=='fjernet'?` (${l.perms.length} rettigheter)`:''}<span>${ftime(l.at)}</span></div>`).join('')}</div>`:''}`;
+}
+async function teamFind(){
+  const q=($('#tmQ')||{}).value||'';const v=q.trim();
+  if(/^\d{15,21}$/.test(v)){
+    const known=V.team.team.find(m=>m.id===v);
+    if(known){if(editableMember(known))openEdit(known);else toast('Den personen kan du ikke endre.');return}
+    try{const r=await api('GET','/api/staff/players?q='+encodeURIComponent(v));const p=r.players[0];V.tEdit={id:v,name:p?p.name:'Discord-bruker',avatarUrl:p?p.avatarUrl:'',title:'',perms:[],isNew:true};V.tFound=null;render(true);const t=$('#tmTitle');if(t)t.focus()}catch(e){errToast(e)}
+    return}
+  try{V.tFound=(await api('GET','/api/staff/players?q='+encodeURIComponent(v))).players;render(true);const i=$('#tmQ');if(i){i.value=v;i.focus()}}catch(e){errToast(e)}
+}
+function openEdit(m){V.tEdit={id:m.id,name:m.name,avatarUrl:m.avatarUrl,title:m.title,perms:m.perms.slice(),isNew:false};V.tFound=null;render(true);const e=$('#tmEditor');if(e)e.scrollIntoView({block:'start',behavior:REDUCE?'auto':'smooth'})}
+function readEdit(){const E=V.tEdit;if(!E)return;const t=$('#tmTitle');if(t)E.title=t.value;E.perms=[...document.querySelectorAll('[data-perm]')].filter(c=>c.checked).map(c=>c.dataset.perm)}
 
 /* =========================================================
    ACTIONS
@@ -776,6 +835,9 @@ document.addEventListener('click',async e=>{
   if(d.stt){V.staffT=d.stt;V.staff=null;render(true);return}
   if('newt' in d){V.newT=true;render(true);const s=$('#tSub');if(s)s.focus();return}
   if(d.ticket||d.sticket){V.ticket=Number(d.ticket||d.sticket);V.ticketFrom=d.sticket?'staff':'tickets';V.ticketData=null;go('ticket');return}
+  if(d.pick){const p=(V.tFound||[]).find(x=>x.id===d.pick);if(p){V.tEdit={id:p.id,name:p.name,avatarUrl:p.avatarUrl,title:'',perms:[],isNew:true};V.tFound=null;render(true);const t=$('#tmTitle');if(t)t.focus()}return}
+  if(d.tedit){const m=V.team.team.find(x=>x.id===d.tedit);if(m)openEdit(m);return}
+  if(d.preset!==undefined){readEdit();const p=PRESETS[+d.preset];V.tEdit.perms=p.perms.filter(grantable);if(!V.tEdit.title.trim())V.tEdit.title=p.name;render(true);return}
   if(d.decide){
     const ta=$('#r_'+d.id);el.disabled=true;
     try{const r=await api('POST',`/api/staff/apps/${d.id}/decide`,{status:d.decide,reply:ta?ta.value:''});toast((d.decide==='godkjent'?'Søknaden er godkjent.':'Søknaden er avslått.')+(r.roleNote?' '+r.roleNote:''));V.staff=null;render(true)}
@@ -786,6 +848,21 @@ document.addEventListener('click',async e=>{
     case 'cinePlay':{const c=G.cine;if(!c)break;c.playing=!c.playing;el.classList.toggle('paused',!c.playing);el.setAttribute('aria-label',c.playing?'Pause':'Spill av');const v=$('#cineVideo');if(c.vidOn){if(c.playing)v.play().catch(()=>{});else v.pause()}break}
     case 'logoutBtn':{e.preventDefault();try{await api('POST','/auth/logout')}catch(x){}ST.user=null;ST.apps=[];ST.tickets=[];V.staff=null;toast('Du er logget ut');location.hash='hjem';break}
     case 'staffReload':V.staff=null;render(true);break;
+    case 'teamReload':V.team=null;render(true);break;
+    case 'tmFind':teamFind();break;
+    case 'tmCancel':V.tEdit=null;render(true);break;
+    case 'tmSave':{
+      readEdit();const E=V.tEdit;el.disabled=true;
+      try{await api('PUT','/api/staff/team/'+E.id,{title:E.title,perms:E.perms});toast(E.isNew?E.name+' er lagt til som staff':'Rettighetene er lagret');V.tEdit=null;V.team=null;render(true)}
+      catch(x){el.disabled=false;errToast(x)}
+      break}
+    case 'tmRemove':{
+      const E=V.tEdit;
+      if(el.dataset.sure!=='1'){el.dataset.sure='1';el.textContent='Trykk igjen for å fjerne '+E.name;setTimeout(()=>{if(el.isConnected){el.dataset.sure='';el.textContent='Fjern fra staff'}},4000);break}
+      el.disabled=true;
+      try{await api('DELETE','/api/staff/team/'+E.id);toast(E.name+' er fjernet fra staff');V.tEdit=null;V.team=null;render(true)}
+      catch(x){el.disabled=false;errToast(x)}
+      break}
     case 'botRegister':{el.disabled=true;try{await api('POST','/api/staff/discord/register',{});toast('/ticket og /ticket-panel er klare i Discord')}catch(x){errToast(x)}el.disabled=false;break}
     case 'delApp':{const id=V.cur;el.disabled=true;try{await api('DELETE','/api/apps/'+id);ST.apps=ST.apps.filter(a=>a.id!==id);toast('Utkastet er slettet');go('soknader')}catch(x){el.disabled=false;errToast(x)}break}
     case 'submitApp':{
@@ -816,7 +893,10 @@ document.addEventListener('click',async e=>{
       break}
   }
 });
+app.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='tmQ'){e.preventDefault();teamFind()}});
+app.addEventListener('change',e=>{if(e.target.dataset&&e.target.dataset.perm)readEdit()});
 app.addEventListener('input',e=>{
+  if(e.target.id==='tmTitle'&&V.tEdit){V.tEdit.title=e.target.value;return}
   if(!e.target.closest('#appForm'))return;
   const a=findApp(V.cur);if(!a)return;
   const c=document.querySelector(`[data-cnt="${e.target.name}"]`);

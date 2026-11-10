@@ -105,7 +105,26 @@
     return errors;
   }
 
-  const api = { FORMS: FORMS, JOBS: JOBS, CATS: CATS, validate: validate };
+  /* Rettigheter for staff. Eieren (STAFF_DISCORD_IDS) har alltid alle. */
+  const PERMS = [
+    { k: 'tickets.view', label: 'Se og svare på tickets', desc: 'Ser alle tickets på nettsiden og i Discord, og kan svare som staff.' },
+    { k: 'tickets.close', label: 'Lukke og slette tickets', desc: 'Kan lukke, åpne igjen og slette ticket-kanaler.' },
+    { k: 'apps.whitelist', label: 'Behandle whitelist-søknader', desc: 'Godkjenne og avslå whitelist.' },
+    { k: 'apps.jobs', label: 'Behandle jobb-, bedrift- og gjengsøknader', desc: 'Politi, ambulanse, mekaniker, bilselger, bedrift og gjeng.' },
+    { k: 'apps.staff', label: 'Behandle staff-søknader', desc: 'Godkjenne og avslå nye staff.' },
+    { k: 'discord.manage', label: 'Discord-oppsett', desc: 'Registrere kommandoer og legge ut ticket-panelet.' },
+    { k: 'staff.manage', label: 'Administrere staff', desc: 'Legge til og fjerne staff. Kan bare gi rettigheter de har selv.' }
+  ];
+  const PERM_KEYS = PERMS.map(function (p) { return p.k; });
+  const PRESETS = [
+    { name: 'Support', perms: ['tickets.view'] },
+    { name: 'Moderator', perms: ['tickets.view', 'tickets.close', 'apps.whitelist'] },
+    { name: 'Admin', perms: ['tickets.view', 'tickets.close', 'apps.whitelist', 'apps.jobs', 'apps.staff', 'discord.manage'] },
+    { name: 'Head Admin', perms: PERM_KEYS.slice() }
+  ];
+  function appPerm(form) { return form === 'whitelist' ? 'apps.whitelist' : form === 'staff' ? 'apps.staff' : 'apps.jobs'; }
+
+  const api = { FORMS: FORMS, JOBS: JOBS, CATS: CATS, validate: validate, PERMS: PERMS, PERM_KEYS: PERM_KEYS, PRESETS: PRESETS, appPerm: appPerm };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NOVEX_FORMS = api;
 })(typeof window !== 'undefined' ? window : globalThis);

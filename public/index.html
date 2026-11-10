@@ -396,6 +396,32 @@ td small{display:block;color:var(--muted)}
 .li b{font-weight:700}
 .li small{color:var(--muted)}
 
+/* staff-team */
+.perms{display:grid;gap:8px}
+.perm{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line2);border-radius:6px;padding:12px 14px;cursor:pointer;background:#fff}
+.perm:hover{border-color:var(--ink)}
+.perm input{width:18px;height:18px;margin-top:2px;accent-color:var(--red);flex:none}
+.perm b{display:block;font-weight:700}
+.perm small{color:var(--muted);font-size:13px}
+.perm.off{opacity:.45;cursor:not-allowed}
+.perm.off:hover{border-color:var(--line2)}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.ptag{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line2);border-radius:4px;padding:3px 8px;color:var(--ink2);background:var(--paper2)}
+.ptag.red{background:var(--red);border-color:var(--red);color:#fff}
+.ptag.ink{background:var(--ink);border-color:var(--ink);color:#fff}
+.member{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#fff;border:1px solid var(--line2);border-radius:6px;padding:14px 16px}
+.member .who2{display:flex;gap:12px;align-items:center;min-width:0;flex:1}
+.member .who2>div{display:grid;gap:6px;min-width:0}
+.member small{color:var(--muted)}
+.found{display:grid;gap:6px;margin-top:6px}
+.found button{display:flex;gap:10px;align-items:center;text-align:left;background:#fff;border:1px solid var(--line2);border-radius:6px;padding:8px 12px;cursor:pointer;width:100%}
+.found button:hover{border-color:var(--ink)}
+.found .av{width:32px;height:32px}
+.logl{display:grid;gap:0;border:1px solid var(--line2);border-radius:6px;background:#fff}
+.logl div{padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink2)}
+.logl div:last-child{border-bottom:0}
+.logl span{color:var(--muted);font-size:13px;margin-left:6px}
+
 .jobs{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:18px}
 @media (max-width:640px){.jobs{grid-template-columns:1fr}}
 .job{display:grid;gap:12px;align-content:start}

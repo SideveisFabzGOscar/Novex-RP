@@ -11,7 +11,7 @@
 import crypto from 'node:crypto';
 import formsModule from '../../public/forms.js';
 
-const { FORMS, JOBS, CATS, validate } = formsModule;
+const { FORMS, JOBS, CATS, validate, PERMS, PERM_KEYS, appPerm } = formsModule;
 
 /* ------------------------------------------------------------------ */
 /* Konfigurasjon                                                       */
@@ -30,6 +30,7 @@ function loadConfig() {
     requireGuild: env.REQUIRE_DISCORD_MEMBER === 'true',
     staffIds: list(env.STAFF_DISCORD_IDS),
     staffRoles: list(env.DISCORD_STAFF_ROLE_IDS),
+    rolePerms: list(env.DISCORD_STAFF_ROLE_PERMS).filter((p) => PERM_KEYS.includes(p)),
     botToken: env.DISCORD_BOT_TOKEN || '',
     wlRole: env.DISCORD_WHITELIST_ROLE_ID || '',
     ticketCategory: env.DISCORD_TICKET_CATEGORY_ID || '',
@@ -126,9 +127,31 @@ async function getUser(C, db, req) {
   if (s.expires_at < Date.now()) { await DB.del(db, 'sessions/' + sha(sid)); return null; }
   const u = await DB.get(db, 'users/' + s.user_id);
   if (!u) return null;
-  u.is_staff = u.is_staff || C.staffIds.includes(u.id) ? 1 : 0;
+  return withStaff(C, db, u);
+}
+
+/* ------------------------------------------------------------------ */
+/* Staff og rettigheter                                                */
+/* ------------------------------------------------------------------ */
+const ROLE_DEFAULT = ['tickets.view', 'tickets.close', 'apps.whitelist'];
+/* Hvem er staff, og hva får de gjøre?
+   1. Eiere (STAFF_DISCORD_IDS) har alltid alt.
+   2. Staff lagt til på nettsiden har rettighetene som er valgt der.
+   3. Har noen bare staff-rollen i Discord, får de standardrettigheter. */
+async function staffInfo(C, db, id, roleStaff) {
+  if (C.staffIds.includes(id)) return { owner: true, title: 'Eier', perms: PERM_KEYS.slice(), source: 'eier' };
+  const r = await DB.get(db, 'staff/' + id);
+  if (r) return { owner: false, title: r.title || 'Staff', perms: (r.perms || []).filter((p) => PERM_KEYS.includes(p)), source: 'nettside' };
+  if (roleStaff) return { owner: false, title: 'Staff', perms: C.rolePerms.length ? C.rolePerms : ROLE_DEFAULT, source: 'rolle' };
+  return null;
+}
+async function withStaff(C, db, u) {
+  const info = await staffInfo(C, db, u.id, !!u.role_staff);
+  u.staff = info; u.perms = info ? info.perms : []; u.is_staff = info ? 1 : 0;
   return u;
 }
+const can = (u, p) => !!(u && u.perms && u.perms.includes(p));
+const need = (u, p, msg) => { if (!can(u, p)) fail(403, msg || 'Du har ikke tilgang til dette.'); };
 function avatarUrl(id, avatar) {
   if (avatar) return `https://cdn.discordapp.com/avatars/${id}/${avatar}.png?size=128`;
   let n = 0; try { n = Number((BigInt(id) >> 22n) % 6n); } catch { /* ignorer */ }
@@ -139,7 +162,8 @@ const hasWhitelist = async (db, uid) => (await userApps(db, uid)).some((a) => a.
 async function publicUser(db, u) {
   return {
     id: u.id, username: u.username, name: u.name || u.username, avatarUrl: avatarUrl(u.id, u.avatar),
-    isStaff: !!u.is_staff, whitelisted: !!u.is_staff || await hasWhitelist(db, u.id), createdAt: u.created_at
+    isStaff: !!u.is_staff, isOwner: !!(u.staff && u.staff.owner), staffTitle: u.staff ? u.staff.title : null, perms: u.perms || [],
+    whitelisted: !!u.is_staff || await hasWhitelist(db, u.id), createdAt: u.created_at
   };
 }
 const appOut = (a) => ({
@@ -150,13 +174,13 @@ const ticketOut = (C, t) => ({
   id: t.id, subject: t.subject, category: t.category, status: t.status, createdAt: t.created_at, updatedAt: t.updated_at,
   channelUrl: t.channel_id && C.guildId ? `https://discord.com/channels/${C.guildId}/${t.channel_id}` : null
 });
-async function upsertDiscordUser(db, d, staff) {
+async function upsertDiscordUser(db, d, roleStaff) {
   const now = Date.now();
   const old = await DB.get(db, 'users/' + d.id);
-  const u = { id: d.id, username: d.username, name: d.global_name || d.username, avatar: d.avatar || null, is_staff: staff ? 1 : 0, created_at: old ? old.created_at : now, last_login: old ? old.last_login : now };
+  const u = { id: d.id, username: d.username, name: d.global_name || d.username, avatar: d.avatar || null, role_staff: roleStaff ? 1 : 0, created_at: old ? old.created_at : now, last_login: old ? old.last_login : now };
   return DB.set(db, 'users/' + d.id, u);
 }
-const isStaffDiscord = (C, id, roles = []) => C.staffIds.includes(id) || roles.some((r) => C.staffRoles.includes(r));
+const hasStaffRole = (C, roles = []) => roles.some((r) => C.staffRoles.includes(r));
 
 /* ------------------------------------------------------------------ */
 /* Discord REST                                                        */
@@ -216,6 +240,7 @@ async function ensureChannel(C, db, t) {
   if (C.ticketCategory) base.parent_id = C.ticketCategory;
   const ov = [{ id: C.guildId, type: 0, deny: String(VIEW) }, { id: C.clientId, type: 1, allow: MEMBER_ALLOW }];
   C.staffRoles.forEach((r) => ov.push({ id: r, type: 0, allow: MEMBER_ALLOW }));
+  (await ticketViewers(C, db)).filter((id) => id !== t.user_id).forEach((id) => ov.push({ id, type: 1, allow: MEMBER_ALLOW }));
   let inGuild = true;
   let r = await discord(C, `/guilds/${C.guildId}/channels`, { bot: true, method: 'POST', body: { ...base, permission_overwrites: [...ov, { id: t.user_id, type: 1, allow: MEMBER_ALLOW }] } });
   if (!r.ok && (r.status === 400 || r.status === 404)) {
@@ -241,6 +266,21 @@ async function ensureChannel(C, db, t) {
     }
   });
   return t.channel_id;
+}
+/* staff som er lagt til på nettsiden, har ikke nødvendigvis staff-rollen i Discord,
+   så de får tilgang til ticket-kanalene hver for seg */
+async function ticketViewers(C, db) {
+  const recs = await DB.all(db, 'staff/');
+  return [...new Set([...C.staffIds, ...recs.filter((r) => (r.perms || []).includes('tickets.view')).map((r) => r.id)])].slice(0, 80);
+}
+async function syncStaffChannels(C, db, id, canView) {
+  if (!botOn(C)) return;
+  const tickets = (await DB.all(db, 'tickets/')).filter((t) => t.channel_id && t.user_id !== id).sort((a, b) => b.updated_at - a.updated_at).slice(0, 40);
+  for (let i = 0; i < tickets.length; i += 5) {
+    await Promise.all(tickets.slice(i, i + 5).map((t) => canView
+      ? discord(C, `/channels/${t.channel_id}/permissions/${id}`, { bot: true, method: 'PUT', body: { type: 1, allow: MEMBER_ALLOW } })
+      : discord(C, `/channels/${t.channel_id}/permissions/${id}`, { bot: true, method: 'DELETE' })));
+  }
 }
 async function postToChannel(C, db, t, m) {
   if (!botOn(C)) return;
@@ -321,13 +361,16 @@ async function interactions(C, db, req) {
   if (i.type === 1) return json(200, { type: 1 });
   if (i.guild_id !== C.guildId || !i.member) return ephemeral('Tickets fungerer bare i Novex-serveren.');
   const user = i.member.user, roles = i.member.roles || [];
-  const staff = isStaffDiscord(C, user.id, roles);
+  const roleStaff = hasStaffRole(C, roles);
+  const info = await staffInfo(C, db, user.id, roleStaff);
+  const perms = info ? info.perms : [];
+  const staff = perms.includes('tickets.view'), closer = perms.includes('tickets.close');
   const fields = () => { const f = {}; (i.data.components || []).forEach((row) => (row.components || []).forEach((c) => { f[c.custom_id] = c.value; })); return f; };
 
   if (i.type === 2) {
     if (i.data.name === 'ticket') return json(200, categoryPicker());
     if (i.data.name === 'ticket-panel') {
-      if (!staff) return ephemeral('Bare staff kan legge ut ticket-panelet.');
+      if (!perms.includes('discord.manage')) return ephemeral('Du trenger rettigheten «Discord-oppsett» for å legge ut ticket-panelet.');
       const r = await discord(C, `/channels/${i.channel_id}/messages`, { bot: true, method: 'POST', body: {
         embeds: [{ title: 'Trenger du hjelp?', description: 'Trykk på knappen under for å opprette en ticket. Du får en privat kanal med staff, og saken vises også under Tickets på nettsiden.', color: 0xe0141f }],
         components: [{ type: 1, components: [{ type: 2, style: 1, label: 'Opprett ticket', custom_id: 'nx:open' }] }] } });
@@ -356,12 +399,13 @@ async function interactions(C, db, req) {
       return json(200, textModal('nx:replym:' + t.id, `Svar på ticket #${tno(t.id)}`, [{ type: 4, custom_id: 'body', label: 'Svaret ditt', style: 2, min_length: 1, max_length: 4000 }]));
     }
     if (m[1] === 'delete') {
-      if (!staff) return ephemeral('Bare staff kan slette kanalen.');
+      if (!closer) return ephemeral('Du har ikke rettighet til å slette ticket-kanaler.');
       if (t.channel_id) await discord(C, `/channels/${t.channel_id}`, { bot: true, method: 'DELETE' });
       t.channel_id = null; await DB.set(db, `tickets/${t.user_id}/${t.id}`, t);
       return json(200, { type: 6 });
     }
-    await upsertDiscordUser(db, user, staff);
+    if (t.user_id !== user.id && !closer) return ephemeral('Du har ikke rettighet til å lukke eller åpne andres tickets.');
+    await upsertDiscordUser(db, user, roleStaff);
     const status = m[1] === 'close' ? 'lukket' : 'apen';
     if (t.status !== status) await setTicketStatus(C, db, t, status, user.global_name || user.username);
     return json(200, { type: 6 });
@@ -369,7 +413,7 @@ async function interactions(C, db, req) {
 
   if (i.type === 5) {
     const id = i.data.custom_id, f = fields();
-    const u = await upsertDiscordUser(db, user, staff);
+    const u = await upsertDiscordUser(db, user, roleStaff);
     let mm = id.match(/^nx:create:(\d+)$/);
     if (mm) {
       try {
@@ -454,7 +498,7 @@ route('GET', '/auth/callback', async ({ C, db, req, url, ip }) => {
   if (C.guildId && C.requireGuild && !member) return back('medlem');
   const d = me.data, now = Date.now();
   const old = await DB.get(db, 'users/' + d.id);
-  await DB.set(db, 'users/' + d.id, { id: d.id, username: d.username, name: d.global_name || d.username, avatar: d.avatar || null, is_staff: isStaffDiscord(C, d.id, roles) ? 1 : 0, created_at: old ? old.created_at : now, last_login: now });
+  await DB.set(db, 'users/' + d.id, { id: d.id, username: d.username, name: d.global_name || d.username, avatar: d.avatar || null, role_staff: hasStaffRole(C, roles) ? 1 : 0, created_at: old ? old.created_at : now, last_login: now });
   const sid = crypto.randomBytes(32).toString('hex');
   await DB.set(db, 'sessions/' + sha(sid), { user_id: d.id, expires_at: now + SESSION_MS });
   return redirect('/#panel', [clear, cookie(C, 'novex_sid', sid, SESSION_MS / 1000)]);
@@ -532,7 +576,7 @@ route('DELETE', '/api/apps/:id', async ({ db, user, params }) => {
 /* ---- tickets ---- */
 async function accessTicket(db, user, id) {
   const t = await findTicket(db, id);
-  if (!t || (t.user_id !== user.id && !user.is_staff)) fail(404, 'Fant ikke ticketen.');
+  if (!t || (t.user_id !== user.id && !can(user, 'tickets.view'))) fail(404, 'Fant ikke ticketen.');
   return t;
 }
 route('GET', '/api/tickets', async ({ C, db, user }) => ({ tickets: (await DB.all(db, `tickets/${user.id}/`)).sort((a, b) => b.updated_at - a.updated_at).map((t) => ticketOut(C, t)) }), { auth: 'user' });
@@ -545,10 +589,10 @@ route('GET', '/api/tickets/:id', async ({ C, db, user, params }) => {
   return {
     ticket: ticketOut(C, t),
     isOwner: t.user_id === user.id,
-    owner: user.is_staff && owner ? { id: owner.id, name: owner.name || owner.username, username: owner.username } : undefined,
+    owner: can(user, 'tickets.view') && owner ? { id: owner.id, name: owner.name || owner.username, username: owner.username } : undefined,
     messages: (t.msgs || []).map((m) => {
       const p = people[m.user_id];
-      return { id: m.id, staff: !!m.is_staff, body: m.body, createdAt: m.created_at, source: m.source || 'web', name: m.is_staff ? 'Novex Staff' : (p ? p.name || p.username : 'Spiller'), staffName: user.is_staff && m.is_staff && p ? p.name || p.username : undefined };
+      return { id: m.id, staff: !!m.is_staff, body: m.body, createdAt: m.created_at, source: m.source || 'web', name: m.is_staff ? 'Novex Staff' : (p ? p.name || p.username : 'Spiller'), staffName: can(user, 'tickets.view') && m.is_staff && p ? p.name || p.username : undefined };
     })
   };
 }, { auth: 'user' });
@@ -558,12 +602,13 @@ route('POST', '/api/tickets/:id/messages', async ({ C, db, user, params, body })
   const text = str(body.body, 4000);
   if (!text) fail(400, 'Skriv en melding.');
   limit('msg:' + user.id, 30, 10 * 60 * 1000);
-  await addTicketMessage(C, db, t, user, text, !!user.is_staff && t.user_id !== user.id);
+  await addTicketMessage(C, db, t, user, text, can(user, 'tickets.view') && t.user_id !== user.id);
   return { ok: true };
 }, { auth: 'user' });
 route('PATCH', '/api/tickets/:id', async ({ C, db, user, params, body }) => {
   const t = await accessTicket(db, user, params.id);
   if (!['apen', 'lukket'].includes(body.status)) fail(400, 'Ugyldig status.');
+  if (t.user_id !== user.id) need(user, 'tickets.close', 'Du har ikke rettighet til å lukke eller åpne andres tickets.');
   if (body.status !== t.status) await setTicketStatus(C, db, t, body.status, user.name || user.username);
   return { ok: true };
 }, { auth: 'user' });
@@ -578,9 +623,9 @@ route('GET', '/api/staff/overview', async ({ db }) => {
     whitelisted: new Set(apps.filter((a) => a.form === 'whitelist' && a.status === 'godkjent').map((a) => a.user_id)).size
   };
 }, { auth: 'staff' });
-route('GET', '/api/staff/apps', async ({ db, url }) => {
+route('GET', '/api/staff/apps', async ({ db, url, user }) => {
   const done = url.searchParams.get('vis') === 'behandlet';
-  let apps = (await DB.all(db, 'apps/')).filter((a) => done ? a.status === 'godkjent' || a.status === 'avslatt' : a.status === 'sendt');
+  let apps = (await DB.all(db, 'apps/')).filter((a) => can(user, appPerm(a.form)) && (done ? a.status === 'godkjent' || a.status === 'avslatt' : a.status === 'sendt'));
   apps.sort((a, b) => done ? (b.decided_at || 0) - (a.decided_at || 0) : (a.submitted_at || 0) - (b.submitted_at || 0));
   apps = apps.slice(0, 200);
   const ids = [...new Set(apps.flatMap((a) => [a.user_id, a.decided_by].filter(Boolean)))];
@@ -597,6 +642,7 @@ route('POST', '/api/staff/apps/:id/decide', async ({ C, db, user, params, body }
   const k = keys.find((x) => x.split('/').pop() === String(Number(params.id) || 0));
   const a = k ? await DB.get(db, k) : null;
   if (!a) fail(404, 'Fant ikke søknaden.');
+  need(user, appPerm(a.form), 'Du har ikke rettighet til å behandle denne typen søknad.');
   if (a.status !== 'sendt') fail(409, 'Søknaden er allerede behandlet.');
   if (!['godkjent', 'avslatt'].includes(body.status)) fail(400, 'Ugyldig status.');
   a.reply = str(body.reply, 2000) || (body.status === 'godkjent' ? 'Søknaden er godkjent. Velkommen!' : 'Søknaden er dessverre avslått. Du kan søke på nytt.');
@@ -609,7 +655,8 @@ route('POST', '/api/staff/apps/:id/decide', async ({ C, db, user, params, body }
   }
   return { ok: true, roleNote };
 }, { auth: 'staff' });
-route('GET', '/api/staff/tickets', async ({ C, db, url }) => {
+route('GET', '/api/staff/tickets', async ({ C, db, url, user }) => {
+  if (!can(user, 'tickets.view')) return { tickets: [] };
   const all = url.searchParams.get('vis') === 'alle';
   const order = { apen: 0, besvart: 1, lukket: 2 };
   let tickets = (await DB.all(db, 'tickets/')).filter((t) => all || t.status !== 'lukket');
@@ -618,13 +665,95 @@ route('GET', '/api/staff/tickets', async ({ C, db, url }) => {
   const people = Object.fromEntries((await Promise.all([...new Set(tickets.map((t) => t.user_id))].map((id) => DB.get(db, 'users/' + id)))).filter(Boolean).map((u) => [u.id, u]));
   return { tickets: tickets.map((t) => ({ ...ticketOut(C, t), user: { id: t.user_id, name: people[t.user_id] ? people[t.user_id].name || people[t.user_id].username : 'Ukjent' } })) };
 }, { auth: 'staff' });
-route('POST', '/api/staff/discord/register', async ({ C }) => {
+route('POST', '/api/staff/discord/register', async ({ C, user }) => {
+  need(user, 'discord.manage', 'Du trenger rettigheten «Discord-oppsett».');
   if (!botOn(C)) fail(400, 'Boten er ikke satt opp. Legg inn DISCORD_BOT_TOKEN, DISCORD_GUILD_ID og DISCORD_CLIENT_ID.');
   const r = await discord(C, `/applications/${C.clientId}/guilds/${C.guildId}/commands`, { bot: true, method: 'PUT', body: [
     { name: 'ticket', description: 'Opprett en ticket til staff', type: 1 },
     { name: 'ticket-panel', description: 'Legg ut knappen for å opprette tickets i denne kanalen', type: 1, default_member_permissions: '32' }
   ] });
   if (!r.ok) fail(502, 'Discord avviste registreringen. Sjekk bot-tokenet og at boten er invitert til serveren.');
+  return { ok: true };
+}, { auth: 'staff' });
+
+/* ---- staff-teamet ---- */
+const ID_RE = /^\d{15,21}$/;
+async function staffLog(db, by, target, action, perms) {
+  const at = Date.now();
+  await DB.set(db, `stafflog/${at}-${crypto.randomBytes(3).toString('hex')}`, { at, by: by.id, byName: by.name || by.username, target: target.id, targetName: target.name || target.username || target.id, action, perms: perms || [] });
+}
+/* sjekker at den som endrer, får lov til å endre denne personen */
+async function checkTarget(C, db, user, id) {
+  need(user, 'staff.manage', 'Du har ikke rettighet til å administrere staff.');
+  if (!ID_RE.test(id)) fail(400, 'Ugyldig Discord-ID. Den skal være 17–20 siffer.');
+  if (id === user.id) fail(409, 'Du kan ikke endre dine egne rettigheter.');
+  if (C.staffIds.includes(id)) fail(409, 'Eiere styres i Netlify (STAFF_DISCORD_IDS) og kan ikke endres her.');
+  const old = await DB.get(db, 'staff/' + id);
+  if (old && !user.staff.owner) {
+    if ((old.perms || []).includes('staff.manage')) fail(403, 'Bare eieren kan endre staff som selv kan administrere staff.');
+    if ((old.perms || []).some((p) => !user.perms.includes(p))) fail(403, 'Denne personen har rettigheter du ikke har selv, så du kan ikke endre dem.');
+  }
+  return old;
+}
+route('GET', '/api/staff/team', async ({ C, db, user }) => {
+  need(user, 'staff.manage', 'Du har ikke rettighet til å administrere staff.');
+  const [recs, logKeys] = await Promise.all([DB.all(db, 'staff/'), DB.keys(db, 'stafflog/')]);
+  const ids = [...new Set([...C.staffIds, ...recs.map((r) => r.id)])];
+  const users = Object.fromEntries((await Promise.all(ids.map((id) => DB.get(db, 'users/' + id)))).filter(Boolean).map((u) => [u.id, u]));
+  const person = (id, r) => { const u = users[id] || {}; const name = u.name || (r && r.name) || u.username || (r && r.username) || 'Ukjent'; return { id, name, username: u.username || (r && r.username) || '', avatarUrl: avatarUrl(id, u.avatar || (r && r.avatar)), lastLogin: u.last_login || null }; };
+  const team = [
+    ...C.staffIds.map((id) => ({ ...person(id), title: 'Eier', perms: PERM_KEYS, owner: true })),
+    ...recs.filter((r) => !C.staffIds.includes(r.id)).map((r) => ({ ...person(r.id, r), title: r.title || 'Staff', perms: (r.perms || []).filter((p) => PERM_KEYS.includes(p)), owner: false, addedAt: r.added_at, updatedAt: r.updated_at }))
+  ];
+  const logs = (await Promise.all(logKeys.sort().reverse().slice(0, 25).map((k) => DB.get(db, k)))).filter(Boolean);
+  return { team, log: logs, roleStaff: C.staffRoles.length ? (C.rolePerms.length ? C.rolePerms : ROLE_DEFAULT) : null };
+}, { auth: 'staff' });
+route('GET', '/api/staff/players', async ({ C, db, user, url }) => {
+  need(user, 'staff.manage', 'Du har ikke rettighet til å administrere staff.');
+  const q = str(url.searchParams.get('q'), 40).toLowerCase();
+  const staffIds = new Set([...C.staffIds, ...(await DB.keys(db, 'staff/')).map((k) => k.split('/').pop())]);
+  const keys = (await DB.keys(db, 'users/')).filter((k) => !staffIds.has(k.split('/').pop())).slice(0, 1500);
+  const users = (await Promise.all(keys.map((k) => DB.get(db, k)))).filter(Boolean);
+  const hit = users.filter((u) => !q || u.id.includes(q) || (u.name || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q));
+  hit.sort((a, b) => (b.last_login || 0) - (a.last_login || 0));
+  return { players: hit.slice(0, 20).map((u) => ({ id: u.id, name: u.name || u.username, username: u.username, avatarUrl: avatarUrl(u.id, u.avatar) })) };
+}, { auth: 'staff' });
+route('PUT', '/api/staff/team/:id', async ({ C, db, user, params, body }) => {
+  const id = params.id;
+  const old = await checkTarget(C, db, user, id);
+  const perms = [...new Set(Array.isArray(body.perms) ? body.perms.map(String) : [])].filter((p) => PERM_KEYS.includes(p));
+  if (!user.staff.owner) {
+    const extra = perms.filter((p) => !user.perms.includes(p));
+    if (extra.length) fail(403, 'Du kan bare gi rettigheter du har selv.');
+    if (perms.includes('staff.manage')) fail(403, 'Bare eieren kan gi rettigheten «Administrere staff».');
+  }
+  const title = str(body.title, 30) || 'Staff';
+  let u = await DB.get(db, 'users/' + id);
+  let profile = u ? { name: u.name || u.username, username: u.username, avatar: u.avatar } : old ? { name: old.name, username: old.username, avatar: old.avatar } : null;
+  if (!profile) {
+    if (!botOn(C)) fail(404, 'Personen har ikke logget inn på nettsiden ennå. Be dem logge inn først, eller sett opp boten så siden kan slå opp Discord-ID-en.');
+    const d = await discord(C, '/users/' + id, { bot: true });
+    if (!d.ok || !d.data || !d.data.id) fail(404, 'Fant ingen Discord-bruker med den ID-en.');
+    if (d.data.bot) fail(400, 'Du kan ikke gjøre en bot til staff.');
+    profile = { name: d.data.global_name || d.data.username, username: d.data.username, avatar: d.data.avatar || null };
+  }
+  const now = Date.now();
+  const rec = { id, title, perms, ...profile, added_by: old ? old.added_by : user.id, added_at: old ? old.added_at : now, updated_by: user.id, updated_at: now };
+  await DB.set(db, 'staff/' + id, rec);
+  const hadView = !!(old && (old.perms || []).includes('tickets.view')), hasView = perms.includes('tickets.view');
+  if (hadView !== hasView) await syncStaffChannels(C, db, id, hasView);
+  await staffLog(db, user, { id, name: profile.name }, old ? 'endret' : 'la til', perms);
+  await notify(C, old ? 'Staff-rettigheter endret' : 'Ny staff', `**${user.name || user.username}** ${old ? 'endret rettighetene til' : 'la til'} **${profile.name}** som ${title}.`, 0x2b2425);
+  return { ok: true };
+}, { auth: 'staff' });
+route('DELETE', '/api/staff/team/:id', async ({ C, db, user, params }) => {
+  const id = params.id;
+  const old = await checkTarget(C, db, user, id);
+  if (!old) fail(404, 'Personen er ikke staff på nettsiden.');
+  await DB.del(db, 'staff/' + id);
+  if ((old.perms || []).includes('tickets.view')) await syncStaffChannels(C, db, id, false);
+  await staffLog(db, user, { id, name: old.name }, 'fjernet', []);
+  await notify(C, 'Staff fjernet', `**${user.name || user.username}** fjernet **${old.name || id}** fra staff.`, 0x2b2425);
   return { ok: true };
 }, { auth: 'staff' });
 
@@ -635,7 +764,7 @@ route('GET', '/api/fivem/whitelist/:discord', async ({ C, db, req, params }) => 
   const id = params.discord.replace(/^discord:/, '');
   if (!/^\d{15,21}$/.test(id)) fail(400, 'Ugyldig Discord-ID.');
   const u = await DB.get(db, 'users/' + id);
-  const staff = !!(u && u.is_staff) || C.staffIds.includes(id);
+  const staff = !!(await staffInfo(C, db, id, !!(u && u.role_staff)));
   return { whitelisted: staff || await hasWhitelist(db, id), registered: !!u, staff };
 }, { raw: true });
 
