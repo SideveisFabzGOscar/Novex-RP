@@ -2,7 +2,7 @@
 
 Nettside for FiveM-serveren Project Novex med:
 
-- forside med 3D-by, filmklipp, bilutstilling og plass til egne bilder og YouTube-trailer
+- forside med bakgrunnsvideo fra YouTube, trailer på repeat, skjermbilder fra serveren og «Lag karakteren din» med eget Novex ID-kort
 - innlogging med Discord
 - whitelist-søknad, jobbsøknader og søknader for bedrift, gjeng og staff
 - tickets med svartråder mellom spiller og staff
