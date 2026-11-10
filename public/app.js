@@ -513,10 +513,11 @@ async function loadMe(){
   try{
     const [c,m]=await Promise.all([api('GET','/api/config'),api('GET','/api/me')]);
     Object.assign(CFG,c);ST.user=m.user;applyConfig();
-    if(ST.user)await Promise.all([loadApps(),loadTickets()]);
+    if(ST.user)await Promise.all([loadApps(),loadTickets(),loadOv()]);
   }catch(e){ST.loadError=e.error;setupHeroVideo()}
   ST.ready=true;refresh(true);
 }
+async function loadOv(){if(ST.user&&ST.user.isStaff){try{V.ov=await api('GET','/api/staff/overview')}catch(e){}}}
 async function loadApps(){ST.apps=(await api('GET','/api/apps')).apps}
 async function loadTickets(){ST.tickets=(await api('GET','/api/tickets')).tickets}
 async function loadStatus(){
@@ -550,7 +551,17 @@ function replaceApp(a){const i=ST.apps.findIndex(x=>x.id===a.id);if(i>=0)ST.apps
    ========================================================= */
 function typing(){const a=document.activeElement;return a&&app.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)}
 function refresh(force){updateNav();if(!PANEL.includes(route))return;if(!force&&typing())return;render(true)}
-function updateNav(){$('#panelBtn').textContent=ST.user?ST.user.name:'Logg inn'}
+function updateNav(){
+  $('#panelBtn').textContent=ST.user?ST.user.name:'Logg inn';
+  /* staff får egne menyvalg øverst, så systemene er lette å finne */
+  const L=$('#links');L.querySelectorAll('.dyn').forEach(x=>x.remove());
+  if(!ST.user)return;
+  const cur=route==='ticket'?V.ticketFrom:route==='soknad'?'soknader':route;
+  const add=(r,label,n)=>{const a=document.createElement('a');a.href='#'+r;a.dataset.r=r;a.className='dyn'+(cur===r?' on':'');a.textContent=label;if(n){const b=document.createElement('span');b.className='ncount';b.textContent=n;a.append(b)}L.append(a)};
+  add('panel','Spillerpanel');
+  if(ST.user.isStaff){const o=(V.staff&&V.staff.overview)||V.ov;add('staff','Staff',o?(o.pending||0)+(o.openTickets||0):0)}
+  if(can('staff.manage'))add('team','Staff-team');
+}
 function render(keepScroll){
   route=(location.hash||'#hjem').slice(1)||'hjem';
   document.querySelectorAll('#links a').forEach(a=>a.classList.toggle('on',a.dataset.r===route));
@@ -953,7 +964,7 @@ async function poll(){
   if(!ST.user||document.hidden||typing())return;
   try{
     const m=await api('GET','/api/me');ST.user=m.user;if(!ST.user){refresh();return}
-    await Promise.all([loadApps(),loadTickets()]);
+    await Promise.all([loadApps(),loadTickets(),loadOv()]);
     if(route==='ticket'&&V.ticket){V.ticketData=await api('GET','/api/tickets/'+V.ticket)}
     if(route==='staff'){V.staff=null}
     refresh();
